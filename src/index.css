@@ -1,0 +1,58 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* PHI dynamic background helpers (pure CSS, Tailwind-friendly) */
+@keyframes phi-float-1 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(60px, 30px, 0) scale(1.06);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes phi-float-2 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-70px, 40px, 0) scale(1.05);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+@keyframes phi-float-3 {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(20px, -50px, 0) scale(1.08);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.phi-blob-1 {
+  animation: phi-float-1 16s ease-in-out infinite;
+}
+.phi-blob-2 {
+  animation: phi-float-2 18s ease-in-out infinite;
+}
+.phi-blob-3 {
+  animation: phi-float-3 20s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .phi-blob-1,
+  .phi-blob-2,
+  .phi-blob-3 {
+    animation: none !important;
+  }
+}
