@@ -3,7 +3,6 @@
 venv/
 __pycache__/
 node_modules/
-dist/
 *.pyc
 .DS_Store
 PHI_CDC_v2_ZeroBudget.docx

@@ -9,6 +9,7 @@ export default function AuthPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   
@@ -20,6 +21,10 @@ export default function AuthPage() {
     setErrorMsg('');
 
     try {
+      if (!isLogin && !termsAccepted) {
+        throw new Error("You must accept the Terms of Service and Privacy Policy to create an account.");
+      }
+      
       if (isLogin) {
         const { error } = await supabase.auth.signInWithPassword({
           email,
@@ -171,6 +176,21 @@ export default function AuthPage() {
              />
           </div>
 
+          {!isLogin && (
+            <div className="flex items-start gap-3 mt-1 px-1">
+              <input 
+                type="checkbox" 
+                id="terms"
+                checked={termsAccepted}
+                onChange={(e) => setTermsAccepted(e.target.checked)}
+                className="mt-1 cursor-pointer accent-slate-900 dark:accent-white"
+              />
+              <label htmlFor="terms" className="text-xs text-slate-500 dark:text-zinc-400 leading-tight">
+                I agree to the <Link to="/terms" target="_blank" className="text-blue-500 hover:underline">Terms of Service</Link> and <Link to="/privacy" target="_blank" className="text-blue-500 hover:underline">Privacy Policy</Link>.
+              </label>
+            </div>
+          )}
+
           <button 
             type="submit" 
             disabled={loading}
@@ -184,9 +204,11 @@ export default function AuthPage() {
         <p className="mt-8 text-sm text-slate-500 dark:text-zinc-400">
           {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
           <button 
+            type="button"
             onClick={() => {
                setIsLogin(!isLogin);
                setErrorMsg('');
+               setTermsAccepted(false);
             }} 
             className="font-bold text-slate-900 dark:text-white hover:underline transition"
           >
