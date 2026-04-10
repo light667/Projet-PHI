@@ -1,11 +1,13 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI
 from dotenv import load_dotenv
 import os
-import uuid
-from db import supabase
-from schemas import PortfolioCreate, PortfolioUpdate
 
 load_dotenv()
+
+from db import supabase
+from schemas import PortfolioCreate, PortfolioUpdate
+import uuid
+
 
 app = FastAPI(title="Phi API")
 
