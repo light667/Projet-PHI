@@ -1,10 +1,66 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mail, Lock, ArrowRight, Github } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Mail, Lock, ArrowRight, Globe } from 'lucide-react';
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabase.js';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  
+  const navigate = useNavigate();
+
+  const handleAuth = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      if (isLogin) {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (error) throw error;
+        // Proceed to dashboard on success
+        navigate('/dashboard'); 
+      } else {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: name,
+            }
+          }
+        });
+        if (error) throw error;
+        alert('Check your email for the confirmation link to activate your account!');
+      }
+    } catch (error: any) {
+      setErrorMsg(error.message || 'An error occurred during authentication.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/dashboard`
+        }
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      setErrorMsg(error.message || 'Error initializing Google Sign-In.');
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center relative font-sans overflow-hidden bg-slate-50 dark:bg-zinc-950">
@@ -33,14 +89,24 @@ export default function AuthPage() {
         <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2 text-center">
           {isLogin ? 'Welcome back' : 'Create an account'}
         </h1>
-        <p className="text-sm text-slate-500 dark:text-zinc-400 mb-8 text-center max-w-xs">
+        <p className="text-sm text-slate-500 dark:text-zinc-400 mb-6 text-center max-w-xs">
           {isLogin 
             ? 'Enter your credentials to access your workspace.' 
             : 'Start building your professional identity today.'}
         </p>
 
+        {errorMsg && (
+          <div className="w-full p-3 mb-4 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 text-sm font-medium text-center border border-red-200 dark:border-red-900/50">
+            {errorMsg}
+          </div>
+        )}
+
         {/* Google SSO Button */}
-        <button className="w-full flex items-center justify-center gap-3 bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-xl px-4 py-3 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors shadow-sm mb-6">
+        <button 
+          onClick={handleGoogleAuth}
+          type="button" 
+          className="w-full flex items-center justify-center gap-3 bg-white dark:bg-black border border-slate-200 dark:border-zinc-800 rounded-xl px-4 py-3 hover:bg-slate-50 dark:hover:bg-zinc-900 transition-colors shadow-sm mb-6"
+        >
           <svg viewBox="0 0 24 24" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -59,8 +125,8 @@ export default function AuthPage() {
           <div className="h-px bg-slate-200 dark:bg-zinc-800 flex-1"></div>
         </div>
 
-        {/* Minimalist Form */}
-        <form className="w-full flex flex-col gap-4">
+        {/* Minimalist Form WITH Supabase Hook */}
+        <form onSubmit={handleAuth} className="w-full flex flex-col gap-4">
           {!isLogin && (
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -69,6 +135,9 @@ export default function AuthPage() {
               <input 
                 type="text" 
                 placeholder="Full Name" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required={!isLogin}
                 className="w-full bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-xl px-10 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
               />
             </div>
@@ -81,6 +150,9 @@ export default function AuthPage() {
              <input 
                type="email" 
                placeholder="Email Address" 
+               value={email}
+               onChange={(e) => setEmail(e.target.value)}
+               required
                className="w-full bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-xl px-10 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
              />
           </div>
@@ -92,18 +164,32 @@ export default function AuthPage() {
              <input 
                type="password" 
                placeholder="Password" 
+               value={password}
+               onChange={(e) => setPassword(e.target.value)}
+               required
                className="w-full bg-slate-50 dark:bg-zinc-900/50 border border-slate-200 dark:border-zinc-800 rounded-xl px-10 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition"
              />
           </div>
 
-          <button type="button" className="w-full bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl py-3 mt-2 font-bold text-sm hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 shadow-lg dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]">
-            {isLogin ? 'Sign In' : 'Create Account'} <ArrowRight size={16} />
+          <button 
+            type="submit" 
+            disabled={loading}
+            className="w-full bg-slate-900 dark:bg-white text-white dark:text-black rounded-xl py-3 mt-2 font-bold text-sm hover:scale-[1.02] transition-transform flex items-center justify-center gap-2 shadow-lg dark:shadow-[0_0_20px_rgba(255,255,255,0.1)] disabled:opacity-50 disabled:scale-100"
+          >
+            {loading ? 'Processing...' : (isLogin ? 'Sign In' : 'Create Account')} 
+            {!loading && <ArrowRight size={16} />}
           </button>
         </form>
 
         <p className="mt-8 text-sm text-slate-500 dark:text-zinc-400">
           {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
-          <button onClick={() => setIsLogin(!isLogin)} className="font-bold text-slate-900 dark:text-white hover:underline transition">
+          <button 
+            onClick={() => {
+               setIsLogin(!isLogin);
+               setErrorMsg('');
+            }} 
+            className="font-bold text-slate-900 dark:text-white hover:underline transition"
+          >
             {isLogin ? 'Sign up' : 'Log in'}
           </button>
         </p>

@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { ArrowRight, Bot, Code, Globe, Layout, Moon, Palette, Star, Sun, Briefcase, Image as ImageIcon } from 'lucide-react';
+import { ArrowRight, Bot, Code, Globe, Moon, Palette, Star, Sun } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../components/ThemeProvider.js';
 import { Link } from 'react-router-dom';

@@ -53,31 +53,31 @@ html.dark .glass-bento {
 }
 
 .star-layer-1 {
-  width: 1px; height: 1px; bg-transparent;
+  width: 1px; height: 1px; background: transparent;
   box-shadow: 10vw 20vh #FFF, 50vw 80vh #FFF, 80vw 10vh #FFF, 25vw 50vh #FFF, 90vw 90vh #FFF, 30vw 10vh #FFF, 40vw 30vh #FFF, 15vw 70vh #FFF, 85vw 35vh #FFF, 60vw 60vh #FFF;
   animation: move-stars 30s linear infinite;
 }
 .star-layer-1::after {
   content: " "; position: absolute; top: 1000px;
-  width: 1px; height: 1px; bg-transparent; box-shadow: inherit;
+  width: 1px; height: 1px; background: transparent; box-shadow: inherit;
 }
 
 .star-layer-2 {
-  width: 2px; height: 2px; bg-transparent;
+  width: 2px; height: 2px; background: transparent;
   box-shadow: 20vw 15vh rgba(255,255,255,0.5), 70vw 60vh rgba(255,255,255,0.5), 90vw 25vh rgba(255,255,255,0.5), 10vw 80vh rgba(255,255,255,0.5), 50vw 40vh rgba(255,255,255,0.5);
   animation: move-stars 20s linear infinite;
 }
 .star-layer-2::after {
   content: " "; position: absolute; top: 1000px;
-  width: 2px; height: 2px; bg-transparent; box-shadow: inherit;
+  width: 2px; height: 2px; background: transparent; box-shadow: inherit;
 }
 
 .star-layer-3 {
-  width: 3px; height: 3px; bg-transparent;
+  width: 3px; height: 3px; background: transparent;
   box-shadow: 45vw 20vh rgba(255,255,255,0.3), 85vw 75vh rgba(255,255,255,0.3), 5vw 45vh rgba(255,255,255,0.3), 65vw 85vh rgba(255,255,255,0.3);
   animation: move-stars 40s linear infinite;
 }
 .star-layer-3::after {
   content: " "; position: absolute; top: 1000px;
-  width: 3px; height: 3px; bg-transparent; box-shadow: inherit;
+  width: 3px; height: 3px; background: transparent; box-shadow: inherit;
 }
