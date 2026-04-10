@@ -4,6 +4,8 @@ import LandingPage from './pages/LandingPage.js';
 import AuthPage from './pages/AuthPage.js';
 import Dashboard from './pages/Dashboard.js';
 import Builder from './pages/Builder.js';
+import Privacy from './pages/Privacy.js';
+import Terms from './pages/Terms.js';
 import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 
 // Route protection wrapper
@@ -29,6 +31,8 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             <Route path="/auth" element={<AuthPage />} />
+            <Route path="/privacy" element={<Privacy />} />
+            <Route path="/terms" element={<Terms />} />
             <Route 
               path="/dashboard" 
               element={
