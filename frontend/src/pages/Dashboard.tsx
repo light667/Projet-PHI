@@ -12,12 +12,12 @@ export default function Dashboard() {
     navigate('/');
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | null | undefined) => {
      if (!name) return 'U';
      return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
   };
 
-  const displayName = user?.user_metadata?.full_name || user?.email || 'User';
+  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 font-sans selection:bg-blue-500/30 overflow-x-hidden border-t-[3px] border-blue-500">

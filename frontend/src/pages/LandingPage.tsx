@@ -80,7 +80,7 @@ export default function LandingPage() {
             {t('hero.tagline')}
           </motion.p>
 
-          {/* CTA Buttons - Linked to Auth */}
+          {/* CTA Buttons - Linked to Dashboard */}
           <div className="flex flex-col sm:flex-row gap-5 mb-14 relative z-20 w-fit mx-auto">
             <Link to="/auth">
               <button className="bg-slate-900 dark:bg-white text-white dark:text-black hover:bg-slate-800 dark:hover:bg-slate-100 px-10 py-5 rounded-full font-bold text-lg flex items-center gap-3 transition-colors shadow-2xl dark:shadow-[0_0_40px_rgba(255,255,255,0.2)]">

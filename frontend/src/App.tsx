@@ -10,13 +10,13 @@ import { AuthProvider, useAuth } from './contexts/AuthContext.js';
 
 // Route protection wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { session, isLoading } = useAuth();
+  const { user, isLoading } = useAuth();
   
   if (isLoading) {
     return <div className="min-h-screen bg-zinc-950 flex items-center justify-center text-white">Loading workspace...</div>;
   }
   
-  if (!session) {
+  if (!user) {
     return <Navigate to="/auth" />;
   }
   

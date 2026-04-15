@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Globe } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabase.js';
+import { auth } from '../lib/firebase.js';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -26,28 +27,18 @@ export default function AuthPage() {
       }
       
       if (isLogin) {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (error) throw error;
-        // Proceed to dashboard on success
+        await signInWithEmailAndPassword(auth, email, password);
         navigate('/dashboard'); 
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: name,
-            }
-          }
-        });
-        if (error) throw error;
-        alert('Check your email for the confirmation link to activate your account!');
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        await updateProfile(userCredential.user, { displayName: name });
+        navigate('/dashboard');
       }
     } catch (error: any) {
-      setErrorMsg(error.message || 'An error occurred during authentication.');
+      if (error.code === 'auth/email-already-in-use') setErrorMsg('This email is already registered.');
+      else if (error.code === 'auth/invalid-credential') setErrorMsg('Invalid email or password.');
+      else if (error.code === 'auth/weak-password') setErrorMsg('Password should be at least 6 characters.');
+      else setErrorMsg(error.message || 'An error occurred during authentication.');
     } finally {
       setLoading(false);
     }
@@ -55,15 +46,13 @@ export default function AuthPage() {
 
   const handleGoogleAuth = async () => {
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/dashboard`
-        }
-      });
-      if (error) throw error;
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      navigate('/dashboard');
     } catch (error: any) {
-      setErrorMsg(error.message || 'Error initializing Google Sign-In.');
+      if (error.code !== 'auth/popup-closed-by-user') {
+         setErrorMsg(error.message || 'Error initializing Google Sign-In.');
+      }
     }
   };
 
@@ -130,7 +119,7 @@ export default function AuthPage() {
           <div className="h-px bg-slate-200 dark:bg-zinc-800 flex-1"></div>
         </div>
 
-        {/* Minimalist Form WITH Supabase Hook */}
+        {/* Minimalist Form */}
         <form onSubmit={handleAuth} className="w-full flex flex-col gap-4">
           {!isLogin && (
             <div className="relative">
