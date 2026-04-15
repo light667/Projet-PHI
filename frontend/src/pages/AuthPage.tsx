@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Mail, Lock, ArrowRight, Globe } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
-import { auth } from '../lib/firebase.js';
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { app } from '../lib/firebase.js';
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+
+const auth = getAuth(app);
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);

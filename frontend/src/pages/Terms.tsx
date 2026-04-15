@@ -1,25 +1,85 @@
 import { Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, FileText } from 'lucide-react';
 
 export default function Terms() {
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 font-sans selection:bg-blue-500/30 text-slate-900 dark:text-white p-8 md:p-16">
-      <div className="max-w-3xl mx-auto">
-        <Link to="/" className="inline-flex items-center gap-2 text-blue-500 hover:text-blue-600 mb-8 font-medium">
+    <div className="min-h-screen bg-slate-50 dark:bg-zinc-950 font-sans selection:bg-blue-500/30 text-slate-900 dark:text-white">
+      <div className="max-w-3xl mx-auto px-6 py-16">
+        <Link to="/" className="inline-flex items-center gap-2 text-blue-500 hover:text-blue-600 mb-10 font-medium text-sm">
           <ArrowLeft size={16} /> Back to Home
         </Link>
-        <h1 className="text-4xl font-black mb-8">Terms of Service</h1>
-        <div className="prose prose-slate dark:prose-invert prose-lg">
-          <p><strong>Effective Date:</strong> January 1, 2026</p>
-          <p>These Terms of Service constitute a legally binding agreement made between you and Phi concerning your access to and use of the application.</p>
-          <h3>1. Agreement to Terms</h3>
-          <p>By accessing our application, you agree that you have read, understood, and agreed to be bound by all of these Terms of Service.</p>
-          <h3>2. Intellectual Property Rights</h3>
-          <p>The application and its original content, features, and functionality are and will remain the exclusive property of Phi and its licensors.</p>
-          <h3>3. User Representations</h3>
-          <p>By using the Site, you represent and warrant that all registration information you submit will be true, accurate, current, and complete.</p>
-          <hr className="my-8 border-slate-200 dark:border-zinc-800" />
-          <p className="text-sm text-slate-500">Contact us at legal@phi-org.vercel.app if you have questions.</p>
+
+        <div className="flex items-center gap-4 mb-8">
+          <div className="w-12 h-12 bg-indigo-100 dark:bg-indigo-900/40 rounded-xl flex items-center justify-center">
+            <FileText size={24} className="text-indigo-600 dark:text-indigo-400" />
+          </div>
+          <div>
+            <h1 className="text-3xl font-black">Terms of Service</h1>
+            <p className="text-sm text-slate-500 dark:text-zinc-500">Last updated: April 15, 2026</p>
+          </div>
+        </div>
+
+        <div className="space-y-8 text-slate-700 dark:text-zinc-300 leading-relaxed">
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">1. Acceptance of Terms</h2>
+            <p>By accessing or using Phi ("the Service"), you agree to be bound by these Terms of Service. If you do not agree with any part of these terms, you must not use the Service. These terms constitute a legally binding agreement between you and Phi.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">2. Description of Service</h2>
+            <p>Phi is an AI-powered platform that helps users create professional portfolios, simulate career interviews, and discover job opportunities. The Service uses artificial intelligence to generate content and provide personalized recommendations.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">3. User Accounts</h2>
+            <p>To access certain features, you must create an account. You are responsible for maintaining the confidentiality of your credentials and for all activities that occur under your account. You must provide accurate and complete registration information.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">4. Intellectual Property</h2>
+            <p>Content you create using Phi belongs to you. However, the Phi platform, including its design, code, AI models, and branding, remains the exclusive property of Phi and its licensors. You may not reproduce, distribute, or create derivative works from the platform itself.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">5. Acceptable Use</h2>
+            <p>You agree not to:</p>
+            <ul className="list-disc pl-6 mt-2 space-y-1">
+              <li>Use the Service for any unlawful purpose</li>
+              <li>Attempt to reverse engineer or exploit the AI systems</li>
+              <li>Upload harmful, misleading, or infringing content</li>
+              <li>Interfere with the Service's operation or security</li>
+              <li>Share your account credentials with third parties</li>
+            </ul>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">6. AI-Generated Content</h2>
+            <p>Content generated by our AI is provided "as is." While we strive for accuracy and quality, AI-generated outputs may contain errors or inaccuracies. You are responsible for reviewing and editing any content before publishing or sharing it professionally.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">7. Limitation of Liability</h2>
+            <p>To the maximum extent permitted by law, Phi shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the Service. Our total liability shall not exceed the amount you have paid us in the 12 months prior to the claim.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">8. Termination</h2>
+            <p>We may suspend or terminate your access to the Service at any time for violation of these Terms or for any other reason at our discretion. Upon termination, your right to use the Service will cease immediately.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">9. Changes to Terms</h2>
+            <p>We reserve the right to modify these Terms at any time. Material changes will be communicated via email or through the Service. Your continued use of Phi after changes constitutes acceptance of the updated Terms.</p>
+          </section>
+
+          <section>
+            <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-3">10. Contact</h2>
+            <p>For questions about these Terms, contact us at: <span className="font-semibold text-blue-500">legal@phi-org.web.app</span></p>
+          </section>
+        </div>
+
+        <div className="mt-12 pt-6 border-t border-slate-200 dark:border-zinc-800 text-xs text-slate-500 dark:text-zinc-600">
+          &copy; {new Date().getFullYear()} Phi. All rights reserved.
         </div>
       </div>
     </div>
