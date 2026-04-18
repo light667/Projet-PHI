@@ -9,10 +9,13 @@ import { trackPageView } from './lib/firebase.js';
 const LandingPage = lazy(() => import('./pages/LandingPage.js'));
 const AuthPage = lazy(() => import('./pages/AuthPage.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
+const DashboardLayout = lazy(() => import('./components/Layout/DashboardLayout.js'));
 const Builder = lazy(() => import('./pages/Builder.js'));
 const Privacy = lazy(() => import('./pages/Privacy.js'));
 const Terms = lazy(() => import('./pages/Terms.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
+const CreateFromTemplate = lazy(() => import('./pages/CreateFromTemplate.js'));
+const EditorLayout = lazy(() => import('./pages/EditorLayout.js'));
 
 // Loading fallback
 function PageLoader() {
@@ -68,7 +71,22 @@ function App() {
                 path="/dashboard" 
                 element={
                   <ProtectedRoute>
-                    <Dashboard />
+                    <DashboardLayout />
+                  </ProtectedRoute>
+                } 
+              >
+                <Route index element={<Dashboard />} />
+                <Route path="portfolios" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Liste des portfolios (Bientôt)</div>} />
+                <Route path="analytics" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Analytiques (Bientôt)</div>} />
+                <Route path="settings" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Paramètres (Bientôt)</div>} />
+                <Route path="help" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Aide & Support (Bientôt)</div>} />
+                <Route path="create/template" element={<CreateFromTemplate />} />
+              </Route>
+              <Route 
+                path="/dashboard/editor/:id" 
+                element={
+                  <ProtectedRoute>
+                    <EditorLayout />
                   </ProtectedRoute>
                 } 
               />
