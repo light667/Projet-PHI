@@ -1,5 +1,7 @@
+import { memo, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
+import type { LucideIcon } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
 import { 
   Sparkles, Eye, FileText, Grid, Star, MoreHorizontal, 
@@ -7,9 +9,33 @@ import {
   ArrowRight, ShieldAlert, CheckCircle2, Circle
 } from 'lucide-react';
 
+interface StatCardProps {
+  title: string;
+  value: string;
+  variation: string;
+  icon: LucideIcon;
+  colorClass: string;
+}
+
+interface PortfolioCardProps {
+  title: string;
+  status: 'En ligne' | 'Brouillon';
+  views?: string;
+  gradient: string;
+}
+
+interface ActivityItemProps {
+  text: string;
+  time: string;
+  color: string;
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'Utilisateur';
+  const displayName = useMemo(
+    () => user?.displayName || user?.email?.split('@')[0] || 'Utilisateur',
+    [user?.displayName, user?.email],
+  );
 
   return (
     <div className="pb-8">
@@ -100,7 +126,7 @@ export default function Dashboard() {
         </Link>
 
         {/* IA Card */}
-        <div className="bg-[var(--surface)] border border-[var(--border-color)] rounded-[16px] p-6 hover:shadow-md transition-shadow relative overflow-hidden group cursor-pointer">
+        <Link to="/dashboard/create/ai" className="bg-[var(--surface)] border border-[var(--border-color)] rounded-[16px] p-6 hover:shadow-md transition-shadow relative overflow-hidden group cursor-pointer block">
           <div className="absolute right-[-10%] top-[-10%] opacity-5 text-purple-600 pointer-events-none group-hover:scale-110 group-hover:opacity-10 transition-all duration-500">
              <Bot size={180} />
           </div>
@@ -118,7 +144,7 @@ export default function Dashboard() {
             <span className="flex items-center gap-2 text-xs font-semibold text-slate-500"><CheckCircle2 size={14} className="text-green-500"/> Définition de l'objectif</span>
             <span className="flex items-center gap-2 text-xs font-semibold text-slate-500"><Circle size={14} /> Génération de la structure</span>
           </div>
-        </div>
+        </Link>
       </div>
 
       {/* 5. ACTIVITÉ RÉCENTE + SUGGESTIONS IA */}
@@ -174,7 +200,7 @@ export default function Dashboard() {
 // COMPONENTS HELPER
 // ------------------------
 
-function StatCard({ title, value, variation, icon: Icon, colorClass }: any) {
+const StatCard = memo(function StatCard({ title, value, variation, icon: Icon, colorClass }: StatCardProps) {
   const isPositive = variation.includes('+');
   const variationVal = variation.split(' ')[0];
   const variationText = variation.split(' ').slice(1).join(' ');
@@ -200,9 +226,9 @@ function StatCard({ title, value, variation, icon: Icon, colorClass }: any) {
       </div>
     </div>
   );
-}
+});
 
-function PortfolioCard({ title, status, views, gradient }: any) {
+const PortfolioCard = memo(function PortfolioCard({ title, status, views, gradient }: PortfolioCardProps) {
   const isOnline = status === 'En ligne';
 
   return (
@@ -237,9 +263,9 @@ function PortfolioCard({ title, status, views, gradient }: any) {
       </div>
     </div>
   );
-}
+});
 
-function ActivityItem({ text, time, color }: any) {
+const ActivityItem = memo(function ActivityItem({ text, time, color }: ActivityItemProps) {
   return (
     <div className="flex gap-4 relative">
       <div className="flex flex-col items-center">
@@ -254,4 +280,4 @@ function ActivityItem({ text, time, color }: any) {
       </div>
     </div>
   );
-}
+});

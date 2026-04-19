@@ -1,15 +1,41 @@
+/* stylelint-disable */
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', system-ui, sans-serif;
-  --color-primary: #1E3A8A;
-  --color-accent: #EAB308;
-  --color-danger: #DC2626;
+  --font-sans: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --font-decorative: 'Playfair Display', serif;
+  --color-primary: #1D9E75;
+  --color-danger: #D85A30;
 }
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  :root {
+    --accent: #4540a8;
+    --accent-light: #eeedfe;
+    --accent2: #7F77DD;
+    --green: #1D9E75;
+    --amber: #BA7517;
+    --red: #D85A30;
+    --bg: #f5f4f1;
+    --surface: #ffffff;
+    --text: #1a1a1a;
+    --text2: #666666;
+    --text3: #aaaaaa;
+    --border-color: rgba(0,0,0,0.08);
+  }
+
+  html.dark {
+    --bg: #09090b;
+    --surface: #18181b;
+    --text: #ffffff;
+    --text2: #a1a1aa;
+    --text3: #52525b;
+    --border-color: rgba(255,255,255,0.08);
+    --accent-light: rgba(69, 64, 168, 0.25);
+  }
+
   html, body {
     margin: 0;
     padding: 0;

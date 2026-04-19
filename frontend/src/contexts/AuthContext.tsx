@@ -1,9 +1,5 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { User, onAuthStateChanged, signOut as firebaseSignOut, getAuth } from 'firebase/auth';
-import { app } from '../lib/firebase.js';
-
-const auth = getAuth(app);
-
+import { User } from 'firebase/auth';
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
@@ -13,26 +9,31 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
-  signOut: async () => {},
+  signOut: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>({ 
+    uid: 'bypass-user-123', 
+    email: 'test@phi.app', 
+    displayName: 'Test User' 
+  } as User);
+  const [isLoading] = useState(false);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setIsLoading(false);
-    });
-
-    return unsubscribe;
+    // BYPASS: Firebase auth is deactivated for now to allow access to pages
+    // const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    //   setUser(currentUser);
+    //   setIsLoading(false);
+    // });
+    // return unsubscribe;
   }, []);
 
   const signOut = async () => {
-    await firebaseSignOut(auth);
+    // await firebaseSignOut(auth);
+    setUser(null);
   };
 
   return (

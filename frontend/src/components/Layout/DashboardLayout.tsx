@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { NavLink, useLocation, Link, Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -10,10 +10,12 @@ import {
   Search, 
   Bell, 
   Menu, 
-  Plus,
+  Sparkles,
   Sun,
   Moon,
-  LayoutTemplate
+  LayoutTemplate,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { useTheme } from '../ThemeProvider.js';
@@ -22,71 +24,98 @@ interface DashboardLayoutProps {
   children?: React.ReactNode;
 }
 
+const SIDEBAR_EXPANDED_WIDTH = 220;
+const SIDEBAR_COLLAPSED_WIDTH = 84;
+
+const NAV_LINKS = [
+  {
+    section: 'Principal',
+    items: [
+      { name: 'Vue d\'ensemble', path: '/dashboard', icon: LayoutDashboard },
+      { name: 'Portfolios', path: '/dashboard/portfolios', icon: Briefcase },
+      { name: 'Analytiques', path: '/dashboard/analytics', icon: BarChart3 },
+    ],
+  },
+  {
+    section: 'Outils',
+    items: [
+      { name: 'Créer depuis un template', path: '/dashboard/create/template', icon: LayoutTemplate },
+      { name: 'Créer avec IA', path: '/dashboard/create/ai', icon: Sparkles },
+    ],
+  },
+  {
+    section: 'Compte',
+    items: [
+      { name: 'Paramètres', path: '/dashboard/settings', icon: Settings },
+      { name: 'Aide & Support', path: '/dashboard/help', icon: HelpCircle },
+    ],
+  },
+] as const;
+
+const BREADCRUMB_BY_PATH: Record<string, string> = {
+  '/dashboard': 'Vue d\'ensemble',
+  '/dashboard/portfolios': 'Portfolios',
+  '/dashboard/analytics': 'Analytiques',
+  '/dashboard/settings': 'Paramètres',
+  '/dashboard/help': 'Aide & Support',
+  '/dashboard/create/template': 'Créer depuis un template',
+  '/dashboard/create/ai': 'Créer avec IA',
+};
+
+function getInitials(name: string | null | undefined) {
+  if (!name) return 'U';
+  return name
+    .split(' ')
+    .map(n => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+}
+
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const location = useLocation();
   const { user } = useAuth();
   const { theme, setTheme } = useTheme();
 
-  const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
-  
-  const getInitials = (name: string | null | undefined) => {
-     if (!name) return 'U';
-     return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  };
+  const toggleTheme = useCallback(() => {
+    setTheme(theme === 'dark' ? 'light' : 'dark');
+  }, [setTheme, theme]);
 
-  const displayName = user?.displayName || user?.email?.split('@')[0] || 'User';
+  const displayName = useMemo(
+    () => user?.displayName || user?.email?.split('@')[0] || 'User',
+    [user?.displayName, user?.email],
+  );
+  const userInitials = useMemo(() => getInitials(displayName), [displayName]);
+  const breadcrumb = useMemo(() => BREADCRUMB_BY_PATH[location.pathname] ?? 'Dashboard', [location.pathname]);
 
-  const navLinks = [
-    { section: 'Principal', items: [
-      { name: 'Vue d\'ensemble', path: '/dashboard', icon: LayoutDashboard },
-      { name: 'Portfolios', path: '/dashboard/portfolios', icon: Briefcase },
-      { name: 'Analytiques', path: '/dashboard/analytics', icon: BarChart3 },
-    ]},
-    { section: 'Outils', items: [
-      { name: 'Créer depuis un template', path: '/dashboard/create/template', icon: LayoutTemplate },
-      { name: 'Éditeur IA', path: '/builder', icon: Plus },
-    ]},
-    { section: 'Compte', items: [
-      { name: 'Paramètres', path: '/dashboard/settings', icon: Settings },
-      { name: 'Aide & Support', path: '/dashboard/help', icon: HelpCircle },
-    ]}
-  ];
-
-  const getBreadcrumb = () => {
-    switch (location.pathname) {
-      case '/dashboard': return 'Vue d\'ensemble';
-      case '/dashboard/portfolios': return 'Portfolios';
-      case '/dashboard/analytics': return 'Analytiques';
-      case '/dashboard/settings': return 'Paramètres';
-      case '/dashboard/help': return 'Aide & Support';
-      case '/dashboard/create/template': return 'Créer depuis un template';
-      case '/builder': return 'Éditeur';
-      default: return 'Dashboard';
-    }
-  };
-
-  const NavContent = () => (
+  const NavContent = ({ collapsed = false }: { collapsed?: boolean }) => (
     <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-6 h-16">
+      <div className={`flex items-center h-16 ${collapsed ? 'justify-center px-2' : 'gap-3 px-6'}`}>
         <img src="/logo.svg" alt="Phi Logo" className="w-8 h-8 object-contain" />
-        <span className="font-bold text-xl tracking-tight text-[var(--text)]">Phi Workspace</span>
+        {!collapsed && <span className="font-bold text-xl tracking-tight text-[var(--text)]">Phi Workspace</span>}
       </div>
 
-      <div className="flex-1 overflow-y-auto py-4 px-4 space-y-6">
-        {navLinks.map((group, idx) => (
+      <div className={`flex-1 overflow-y-auto py-4 ${collapsed ? 'px-2 space-y-4' : 'px-4 space-y-6'}`}>
+        {NAV_LINKS.map((group, idx) => (
           <div key={idx}>
-            <div className="text-xs font-semibold text-[var(--text3)] uppercase tracking-wider mb-2 px-2">
-              {group.section}
-            </div>
+            {!collapsed && (
+              <div className="text-xs font-semibold text-[var(--text3)] uppercase tracking-wider mb-2 px-2">
+                {group.section}
+              </div>
+            )}
             <div className="space-y-1">
               {group.items.map((item) => (
                 <NavLink
                   key={item.name}
                   to={item.path}
                   end={item.path === '/dashboard'}
+                  title={item.name}
                   className={({ isActive }) => 
-                    `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    `flex items-center rounded-xl text-sm font-medium transition-colors ${
+                      collapsed ? 'justify-center px-2 py-2.5' : 'gap-3 px-3 py-2'
+                    } ${
                       isActive 
                         ? 'bg-[var(--accent-light)] text-[var(--accent)]' 
                         : 'text-[var(--text2)] hover:bg-[var(--border-color)]'
@@ -95,7 +124,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <item.icon size={18} />
-                  {item.name}
+                  {!collapsed && item.name}
                 </NavLink>
               ))}
             </div>
@@ -103,17 +132,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         ))}
       </div>
 
-      <div className="p-4 border-t border-[var(--border-color)]">
-        <div className="flex items-center gap-3 p-2 hover:bg-[var(--accent-light)] rounded-xl cursor-pointer transition-colors group">
+      <div className={`border-t border-[var(--border-color)] ${collapsed ? 'p-2' : 'p-4'}`}>
+        <div className={`p-2 hover:bg-[var(--accent-light)] rounded-xl cursor-pointer transition-colors group ${collapsed ? 'flex justify-center' : 'flex items-center gap-3'}`}>
           <div className="w-9 h-9 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-105 transition-transform">
-            {getInitials(displayName)}
+            {userInitials}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-[var(--text)] truncate">{displayName}</div>
-            <div className="text-xs text-[var(--green)] font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-[var(--green)] rounded-full inline-block"></span> Pro Plan
+          {!collapsed && (
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-[var(--text)] truncate">{displayName}</div>
+              <div className="text-xs text-[var(--green)] font-medium flex items-center gap-1">
+                <span className="w-1.5 h-1.5 bg-[var(--green)] rounded-full inline-block"></span> Pro Plan
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>
@@ -122,9 +153,13 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans flex">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:block w-[220px] shrink-0 border-r border-solid border-[var(--border-color)] bg-[var(--surface)] h-screen sticky top-0 overflow-hidden">
-        <NavContent />
-      </aside>
+      <motion.aside
+        animate={{ width: isSidebarOpen ? SIDEBAR_EXPANDED_WIDTH : SIDEBAR_COLLAPSED_WIDTH }}
+        transition={{ duration: 0.25, ease: 'easeInOut' }}
+        className="hidden md:block shrink-0 border-r border-solid border-[var(--border-color)] bg-[var(--surface)] h-screen sticky top-0 overflow-hidden"
+      >
+        <NavContent collapsed={!isSidebarOpen} />
+      </motion.aside>
 
       {/* Mobile Sidebar overlay */}
       <AnimatePresence>
@@ -162,9 +197,16 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               >
                 <Menu size={24} />
               </button>
+              <button
+                className="hidden md:inline-flex items-center justify-center p-2 text-[var(--text2)] hover:text-[var(--text)] border border-[var(--border-color)] rounded-lg hover:bg-[var(--border-color)] transition-colors"
+                onClick={() => setIsSidebarOpen(prev => !prev)}
+                title={isSidebarOpen ? 'Rétracter la sidebar' : 'Dérouler la sidebar'}
+              >
+                {isSidebarOpen ? <PanelLeftClose size={18} /> : <PanelLeftOpen size={18} />}
+              </button>
               <div className="text-sm font-semibold text-[var(--text2)]">
                 <span className="hidden sm:inline">Phi / </span>
-                <span className="text-[var(--text)]">{getBreadcrumb()}</span>
+                <span className="text-[var(--text)]">{breadcrumb}</span>
               </div>
             </div>
 
@@ -185,10 +227,10 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               
               <div className="w-px h-6 bg-[var(--border-color)] hidden sm:block"></div>
               
-              <Link to="/dashboard/create/template">
+              <Link to="/dashboard/create/ai">
                 <button className="hidden sm:flex items-center gap-2 bg-[var(--accent)] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--accent2)] transition-colors shadow-sm">
-                  <Plus size={16} />
-                  Nouveau
+                  <Sparkles size={16} />
+                  Créer avec IA
                 </button>
               </Link>
             </div>

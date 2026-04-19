@@ -13,6 +13,20 @@ export interface TemplateDefinition {
 }
 
 export type PortfolioVisibility = 'public' | 'private';
+export type PortfolioDraftSource = 'template' | 'ai';
+
+export interface AIGeneratedPortfolioDraft {
+  title: string;
+  description: string;
+  domain: string;
+  theme: PortfolioData['theme'];
+  layout: PortfolioData['layout'];
+  sections: PortfolioSection[];
+  seoKeywords: string[];
+  tone: string;
+  style: string;
+  model?: string;
+}
 
 export interface PortfolioDraft extends PortfolioData {
   templateId: string;
@@ -22,6 +36,13 @@ export interface PortfolioDraft extends PortfolioData {
   domain: string;
   createdAt: string;
   updatedAt: string;
+  source: PortfolioDraftSource;
+  generation?: {
+    model?: string;
+    tone: string;
+    style: string;
+    seoKeywords: string[];
+  };
 }
 
 const DRAFT_STORAGE_PREFIX = 'phi-portfolio-draft';
@@ -100,6 +121,7 @@ export function createPortfolioDraft(params: {
     domain: params.template.domain,
     createdAt: now,
     updatedAt: now,
+    source: 'template',
     metadata: {
       title: params.title,
       description: params.template.description,
@@ -115,6 +137,42 @@ export function createPortfolioDraft(params: {
       navigation: 'topbar',
     },
     sections: buildSections(params.template, params.title),
+  };
+}
+
+export function createAIPortfolioDraft(params: {
+  generated: AIGeneratedPortfolioDraft;
+  slug: string;
+  visibility: PortfolioVisibility;
+  author: string;
+}): PortfolioDraft {
+  const id = `ai-${Date.now()}`;
+  const now = new Date().toISOString();
+
+  return {
+    id,
+    templateId: 'ai-generated',
+    templateName: 'Claude AI',
+    slug: params.slug,
+    visibility: params.visibility,
+    domain: params.generated.domain,
+    createdAt: now,
+    updatedAt: now,
+    source: 'ai',
+    generation: {
+      model: params.generated.model,
+      tone: params.generated.tone,
+      style: params.generated.style,
+      seoKeywords: params.generated.seoKeywords,
+    },
+    metadata: {
+      title: params.generated.title,
+      description: params.generated.description,
+      author: params.author,
+    },
+    theme: params.generated.theme,
+    layout: params.generated.layout,
+    sections: params.generated.sections,
   };
 }
 

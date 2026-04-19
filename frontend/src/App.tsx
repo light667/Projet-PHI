@@ -10,11 +10,11 @@ const LandingPage = lazy(() => import('./pages/LandingPage.js'));
 const AuthPage = lazy(() => import('./pages/AuthPage.js'));
 const Dashboard = lazy(() => import('./pages/Dashboard.js'));
 const DashboardLayout = lazy(() => import('./components/Layout/DashboardLayout.js'));
-const Builder = lazy(() => import('./pages/Builder.js'));
 const Privacy = lazy(() => import('./pages/Privacy.js'));
 const Terms = lazy(() => import('./pages/Terms.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 const CreateFromTemplate = lazy(() => import('./pages/CreateFromTemplate.js'));
+const CreateFromAI = lazy(() => import('./pages/CreateFromAI.js'));
 const EditorLayout = lazy(() => import('./pages/EditorLayout.js'));
 
 // Loading fallback
@@ -81,6 +81,7 @@ function App() {
                 <Route path="settings" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Paramètres (Bientôt)</div>} />
                 <Route path="help" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Aide & Support (Bientôt)</div>} />
                 <Route path="create/template" element={<CreateFromTemplate />} />
+                <Route path="create/ai" element={<CreateFromAI />} />
               </Route>
               <Route 
                 path="/dashboard/editor/:id" 
@@ -94,7 +95,7 @@ function App() {
                 path="/builder" 
                 element={
                   <ProtectedRoute>
-                    <Builder />
+                    <Navigate to="/dashboard/create/ai" replace />
                   </ProtectedRoute>
                 } 
               />
