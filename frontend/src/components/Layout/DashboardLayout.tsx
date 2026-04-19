@@ -1,31 +1,26 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { NavLink, useLocation, Link, Outlet } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   LayoutDashboard, 
-  Briefcase, 
-  BarChart3, 
   Settings, 
-  HelpCircle, 
-  Search, 
-  Bell, 
   Menu, 
   Plus,
   Sun,
   Moon,
-  LayoutTemplate
+  Bot,
+  CreditCard,
+  LogOut,
+  Grid
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.js';
 import { useTheme } from '../ThemeProvider.js';
 
-interface DashboardLayoutProps {
-  children?: React.ReactNode;
-}
 
-export default function DashboardLayout({ children }: DashboardLayoutProps) {
+export default function DashboardLayout() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const { theme, setTheme } = useTheme();
 
   const toggleTheme = () => setTheme(theme === 'dark' ? 'light' : 'dark');
@@ -40,33 +35,28 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const navLinks = [
     { section: 'Principal', items: [
       { name: 'Vue d\'ensemble', path: '/dashboard', icon: LayoutDashboard },
-      { name: 'Portfolios', path: '/dashboard/portfolios', icon: Briefcase },
-      { name: 'Analytiques', path: '/dashboard/analytics', icon: BarChart3 },
-    ]},
-    { section: 'Outils', items: [
-      { name: 'Créer depuis un template', path: '/dashboard/create/template', icon: LayoutTemplate },
-      { name: 'Éditeur IA', path: '/builder', icon: Plus },
+      { name: 'Coach IA', path: '/dashboard/coach', icon: Bot },
+      { name: 'Mes Portfolios', path: '/dashboard/portfolios', icon: Grid },
     ]},
     { section: 'Compte', items: [
+      { name: 'Mes Crédits', path: '/dashboard/credits', icon: CreditCard },
       { name: 'Paramètres', path: '/dashboard/settings', icon: Settings },
-      { name: 'Aide & Support', path: '/dashboard/help', icon: HelpCircle },
     ]}
   ];
 
   const getBreadcrumb = () => {
     switch (location.pathname) {
       case '/dashboard': return 'Vue d\'ensemble';
+      case '/dashboard/coach': return 'Coach IA';
       case '/dashboard/portfolios': return 'Portfolios';
-      case '/dashboard/analytics': return 'Analytiques';
+      case '/dashboard/credits': return 'Crédits';
       case '/dashboard/settings': return 'Paramètres';
-      case '/dashboard/help': return 'Aide & Support';
-      case '/dashboard/create/template': return 'Créer depuis un template';
-      case '/builder': return 'Éditeur';
+      case '/dashboard/create/template': return 'Nouveau Portfolio';
       default: return 'Dashboard';
     }
   };
 
-  const NavContent = () => (
+  const TopNavContent = () => (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 px-6 h-16">
         <img src="/logo.svg" alt="Phi Logo" className="w-8 h-8 object-contain" />
@@ -86,9 +76,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
                   to={item.path}
                   end={item.path === '/dashboard'}
                   className={({ isActive }) => 
-                    `flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium transition-colors ${
+                    `flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
                       isActive 
-                        ? 'bg-[var(--accent-light)] text-[var(--accent)]' 
+                        ? 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400' 
                         : 'text-[var(--text2)] hover:bg-[var(--border-color)]'
                     }`
                   }
@@ -104,17 +94,19 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
       </div>
 
       <div className="p-4 border-t border-[var(--border-color)]">
-        <div className="flex items-center gap-3 p-2 hover:bg-[var(--accent-light)] rounded-xl cursor-pointer transition-colors group">
-          <div className="w-9 h-9 rounded-full bg-[var(--accent)] text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-105 transition-transform">
-            {getInitials(displayName)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-semibold text-[var(--text)] truncate">{displayName}</div>
-            <div className="text-xs text-[var(--green)] font-medium flex items-center gap-1">
-              <span className="w-1.5 h-1.5 bg-[var(--green)] rounded-full inline-block"></span> Pro Plan
+        <Link to="/dashboard/settings">
+          <div className="flex items-center gap-3 p-2 hover:bg-[var(--accent-light)] rounded-xl cursor-pointer transition-colors group">
+            <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-105 transition-transform">
+              {getInitials(displayName)}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-[var(--text)] truncate">{displayName}</div>
+              <div className="text-xs text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1">
+                50 Crédits
+              </div>
             </div>
           </div>
-        </div>
+        </Link>
       </div>
     </div>
   );
@@ -122,8 +114,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
   return (
     <div className="min-h-screen bg-[var(--bg)] text-[var(--text)] font-sans flex">
       {/* Desktop Sidebar */}
-      <aside className="hidden md:block w-[220px] shrink-0 border-r border-solid border-[var(--border-color)] bg-[var(--surface)] h-screen sticky top-0 overflow-hidden">
-        <NavContent />
+      <aside className="hidden md:block w-[240px] shrink-0 border-r border-solid border-[var(--border-color)] bg-[var(--surface)] h-screen sticky top-0 overflow-hidden">
+        <TopNavContent />
       </aside>
 
       {/* Mobile Sidebar overlay */}
@@ -134,7 +126,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/20 z-40 md:hidden backdrop-blur-sm"
+              className="fixed inset-0 bg-black/40 z-40 md:hidden backdrop-blur-sm"
               onClick={() => setIsMobileMenuOpen(false)}
             />
             <motion.aside
@@ -142,9 +134,9 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
               transition={{ type: 'spring', bounce: 0, duration: 0.3 }}
-              className="fixed inset-y-0 left-0 w-[240px] bg-[var(--surface)] z-50 shadow-xl md:hidden flex flex-col"
+              className="fixed inset-y-0 left-0 w-[260px] bg-[var(--surface)] z-50 shadow-xl md:hidden flex flex-col"
             >
-               <NavContent />
+               <TopNavContent />
             </motion.aside>
           </>
         )}
@@ -162,31 +154,37 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
               >
                 <Menu size={24} />
               </button>
-              <div className="text-sm font-semibold text-[var(--text2)]">
-                <span className="hidden sm:inline">Phi / </span>
+              <div className="text-sm font-semibold text-[var(--text2)] flex items-center gap-2">
+                <span className="hidden sm:inline">Phi</span>
+                <span className="hidden sm:inline text-slate-300 dark:text-zinc-600">/</span>
                 <span className="text-[var(--text)]">{getBreadcrumb()}</span>
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-3 sm:gap-5">
+            <div className="flex items-center justify-end gap-2 sm:gap-4">
+              <Link to="/dashboard/credits" className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-lg text-sm font-bold border border-indigo-100 dark:border-indigo-500/20 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
+                <CreditCard size={14} /> 50 CR
+              </Link>
+
               <button 
                 onClick={toggleTheme} 
-                className="text-[var(--text2)] hover:text-[var(--text)] transition-colors p-1 hidden sm:block"
+                className="text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-zinc-800"
               >
-                {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
-              <button className="text-[var(--text2)] hover:text-[var(--text)] transition-colors p-1 relative">
-                <Search size={20} />
-              </button>
-              <button className="text-[var(--text2)] hover:text-[var(--text)] transition-colors p-1 relative">
-                <Bell size={20} />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[var(--red)] rounded-full ring-2 ring-white"></span>
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
               </button>
               
-              <div className="w-px h-6 bg-[var(--border-color)] hidden sm:block"></div>
+              <div className="w-px h-5 bg-[var(--border-color)] hidden sm:block mx-1"></div>
+
+              <button 
+                onClick={signOut}
+                className="text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10"
+                title="Déconnexion"
+              >
+                <LogOut size={18} />
+              </button>
               
               <Link to="/dashboard/create/template">
-                <button className="hidden sm:flex items-center gap-2 bg-[var(--accent)] text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-[var(--accent2)] transition-colors shadow-sm">
+                <button className="hidden sm:flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm ml-2">
                   <Plus size={16} />
                   Nouveau
                 </button>
@@ -196,8 +194,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
         </header>
 
         {/* Dynamic Pages Content */}
-        <main className="p-[28px] overflow-auto flex-1 flex flex-col gap-[22px]">
-          {children || <Outlet />}
+        <main className="p-4 sm:p-6 md:p-8 overflow-auto flex-1 flex flex-col relative w-full">
+          <Outlet />
         </main>
       </div>
     </div>

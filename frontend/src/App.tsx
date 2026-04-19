@@ -16,6 +16,9 @@ const Terms = lazy(() => import('./pages/Terms.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 const CreateFromTemplate = lazy(() => import('./pages/CreateFromTemplate.js'));
 const EditorLayout = lazy(() => import('./pages/EditorLayout.js'));
+const CoachChat = lazy(() => import('./pages/CoachChat.js'));
+const Credits = lazy(() => import('./pages/Credits.js'));
+const Settings = lazy(() => import('./pages/Settings.js'));
 
 // Loading fallback
 function PageLoader() {
@@ -76,10 +79,10 @@ function App() {
                 } 
               >
                 <Route index element={<Dashboard />} />
-                <Route path="portfolios" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Liste des portfolios (Bientôt)</div>} />
-                <Route path="analytics" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Analytiques (Bientôt)</div>} />
-                <Route path="settings" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Paramètres (Bientôt)</div>} />
-                <Route path="help" element={<div className="h-full flex items-center justify-center text-[var(--text2)]">Aide & Support (Bientôt)</div>} />
+                <Route path="coach" element={<CoachChat />} />
+                <Route path="credits" element={<Credits />} />
+                <Route path="settings" element={<Settings />} />
+                <Route path="portfolios" element={<div className="h-full flex items-center justify-center text-[var(--text2)] flex-col gap-4"><span>Liste des portfolios (Bientôt)</span><p className="text-sm">Vous pourrez gérer vos portfolios ici et les lier à un nom de domaine personnalisé.</p></div>} />
                 <Route path="create/template" element={<CreateFromTemplate />} />
               </Route>
               <Route 

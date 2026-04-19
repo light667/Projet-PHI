@@ -1,9 +1,10 @@
-# Phi - AI Portfolio & Career Intelligence
-# https://phi-org.web.app
-
 User-agent: *
 Allow: /
-Disallow: /dashboard
-Disallow: /builder
+Allow: /auth
+Allow: /privacy
+Allow: /terms
+Disallow: /dashboard/
+Disallow: /builder/
+Disallow: /api/
 
 Sitemap: https://phi-org.web.app/sitemap.xml
