@@ -1,14 +1,23 @@
-from fastapi import FastAPI, HTTPException, Depends
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 import uuid
+import json
+import re
+from datetime import datetime, timezone
+
 import google.generativeai as genai
 
 load_dotenv()
 
 from db import supabase
-from schemas import PortfolioCreate, PortfolioUpdate, ChatRequest
+from schemas import PortfolioCreate, PortfolioUpdate, ChatRequest, PortfolioGenerateRequest
+
+AI_PORTFOLIO_CREDIT_COST = 10
+ALLOWED_SECTION_TYPES = frozenset({"hero", "about", "gallery", "contact", "projects", "custom"})
 
 # Initialize Gemini AI
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -17,11 +26,28 @@ if GEMINI_API_KEY:
     
 app = FastAPI(title="Phi API")
 
+
+def _cors_allow_origins() -> list[str]:
+    """Liste depuis CORS_ORIGINS (virgules). Défaut : Firebase Hosting + Vite local."""
+    default = (
+        "https://phi-org.web.app,"
+        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173"
+    )
+    raw = os.getenv("CORS_ORIGINS", default).strip()
+    if raw == "*":
+        return ["*"]
+    origins = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
+    return origins if origins else ["*"]
+
+
+_origins = _cors_allow_origins()
+_credentials = False if "*" in _origins else True
+
 # --- CORS Configuration ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # In production, restrict to your Firebase domains
-    allow_credentials=True,
+    allow_origins=_origins,
+    allow_credentials=_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -30,6 +56,194 @@ app.add_middleware(
 def get_current_user(user_id: str = "test-user-id"):
     return user_id
 
+
+def _iso_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _get_credit_balance(user_id: str) -> int:
+    try:
+        res = supabase.table("user_credits").select("balance").eq("user_id", user_id).execute()
+        if not res.data:
+            supabase.table("user_credits").insert({"user_id": user_id, "balance": 50}).execute()
+            return 50
+        return int(res.data[0]["balance"])
+    except Exception as e:
+        print(f"credit balance error: {e}")
+        return 50
+
+
+def _debit_credits(user_id: str, current_balance: int, amount: int, description: str) -> int:
+    new_balance = current_balance - amount
+    supabase.table("user_credits").update({"balance": new_balance}).eq("user_id", user_id).execute()
+    try:
+        supabase.table("credit_transactions").insert(
+            {"user_id": user_id, "amount": -amount, "description": description}
+        ).execute()
+    except Exception as e:
+        print(f"credit_transactions log: {e}")
+    return new_balance
+
+
+def _build_portfolio_generation_prompt(req: PortfolioGenerateRequest) -> str:
+    projects_txt = "\n".join(
+        f"- {p.name}: {p.description} (url: {p.url or 'n/a'}, stack: {p.stack or 'n/a'})"
+        for p in req.projects
+    ) or "(aucun projet listé — propose 2 projets fictifs crédibles basés sur le profil, clairement marqués comme exemples à remplacer)"
+
+    social = req.social.model_dump(exclude_none=True)
+    social_txt = json.dumps(social, ensure_ascii=False) if social else "{}"
+
+    return f"""Tu es un expert en portfolios web professionnels et en copywriting carrière.
+À partir des informations utilisateur ci-dessous, produis UN SEUL objet JSON valide (sans markdown, sans texte autour) avec cette structure exacte :
+{{
+  "metadata": {{
+    "title": string (titre du site, accrocheur),
+    "description": string (meta description SEO, 150-160 caractères),
+    "author": string (nom affiché)
+  }},
+  "theme": {{
+    "primaryColor": string (hex, ex: "#4f46e5"),
+    "secondaryColor": string (hex),
+    "fontFamily": string (ex: "Inter", "DM Sans", "Space Grotesk"),
+    "variant": "light" ou "dark" (doit correspondre à la préférence utilisateur: {req.theme_variant})
+  }},
+  "layout": {{
+    "navigation": "topbar" | "sidebar" | "minimal" (choisis ce qui colle au domaine et au ton)
+  }},
+  "sections": [
+    {{
+      "id": string (unique kebab-case),
+      "type": "hero" | "about" | "projects" | "contact" | "gallery" | "custom",
+      "isVisible": true,
+      "content": object (champs riches selon le type)
+    }}
+  ],
+  "seo": {{
+    "title": string,
+    "description": string
+  }},
+  "deploy_readiness": {{
+    "summary": string (1 phrase: ce qui est prêt pour une mise en ligne),
+    "checklist": string[] (3 à 6 actions concrètes avant déploiement: images, domaine, etc.)
+  }}
+}}
+
+Règles pour "content" des sections :
+- hero: headline, subheadline, ctaPrimary, ctaSecondary (optionnel), tags (liste de mots-clés)
+- about: title, body (2-4 paragraphes, ton {req.tone}), highlights (liste de 4-6 puces courtes)
+- projects: title, intro (phrase), items: [{{ "name", "description", "url", "tags": [] }}] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
+- contact: title, email, phone, location, links: [{{ "label", "url" }}]
+- custom: optionnel, pour témoignages ou compétences techniques si pertinent
+
+Domaine métier (slug): {req.domain}
+Ton rédactionnel: {req.tone}
+Objectif carrière: {req.career_goal}
+Public cible: {req.target_audience or "recruteurs et clients"}
+Indication couleur accent (si fournie): {req.accent_color_hint or "aucune — choisis une palette cohérente"}
+
+INFORMATIONS UTILISATEUR
+Nom: {req.full_name}
+Titre / rôle: {req.professional_title}
+Email: {req.email or "non fourni"}
+Téléphone: {req.phone or "non fourni"}
+Localisation: {req.location or "non fournie"}
+Réseaux & liens (JSON): {social_txt}
+Bio / parcours: {req.bio}
+Années d'expérience: {req.years_experience if req.years_experience is not None else "non précisé"}
+Projets fournis:
+{projects_txt}
+
+Le champ metadata.author doit être "{req.full_name}".
+Le contenu doit être en français professionnel sauf si le profil indique clairement une audience anglophone.
+"""
+
+
+def _normalize_generated_portfolio(data: dict, req: PortfolioGenerateRequest) -> dict:
+    """Assure la cohérence minimale avec le schéma attendu par le frontend."""
+    meta = data.get("metadata") or {}
+    meta.setdefault("title", req.title)
+    meta.setdefault("description", meta.get("title", req.title)[:160])
+    meta.setdefault("author", req.full_name)
+
+    theme = data.get("theme") or {}
+    theme.setdefault("primaryColor", "#4f46e5")
+    theme.setdefault("secondaryColor", "#f8fafc")
+    theme.setdefault("fontFamily", "Inter")
+    theme.setdefault("variant", req.theme_variant if req.theme_variant in ("light", "dark") else "light")
+
+    layout = data.get("layout") or {}
+    nav = layout.get("navigation", "topbar")
+    if nav not in ("sidebar", "topbar", "minimal"):
+        nav = "topbar"
+    layout = {"navigation": nav}
+
+    raw_sections = data.get("sections")
+    if not isinstance(raw_sections, list) or not raw_sections:
+        raw_sections = [
+            {
+                "id": "hero-main",
+                "type": "hero",
+                "isVisible": True,
+                "content": {
+                    "headline": req.professional_title,
+                    "subheadline": req.bio[:280] + ("…" if len(req.bio) > 280 else ""),
+                    "ctaPrimary": "Me contacter",
+                    "tags": [req.domain, "Portfolio"],
+                },
+            }
+        ]
+
+    sections = []
+    for i, sec in enumerate(raw_sections):
+        if not isinstance(sec, dict):
+            continue
+        stype = sec.get("type", "custom")
+        if stype not in ALLOWED_SECTION_TYPES:
+            stype = "custom"
+        sid = sec.get("id") or f"section-{i+1}"
+        sid = re.sub(r"[^a-zA-Z0-9_-]", "-", str(sid))[:64]
+        sections.append(
+            {
+                "id": sid,
+                "type": stype,
+                "isVisible": bool(sec.get("isVisible", True)),
+                "content": sec.get("content") if isinstance(sec.get("content"), dict) else {},
+            }
+        )
+
+    seo = data.get("seo") if isinstance(data.get("seo"), dict) else {}
+    deploy = data.get("deploy_readiness") if isinstance(data.get("deploy_readiness"), dict) else {}
+
+    return {
+        "metadata": meta,
+        "theme": theme,
+        "layout": layout,
+        "sections": sections,
+        "seo": seo,
+        "deploy_readiness": deploy,
+    }
+
+
+def _draft_from_core(portfolio_id: str, req: PortfolioGenerateRequest, core: dict) -> dict:
+    now = _iso_now()
+    return {
+        "id": portfolio_id,
+        "templateId": "ai",
+        "templateName": "Génération IA Phi",
+        "slug": req.slug,
+        "visibility": req.visibility,
+        "domain": req.domain,
+        "createdAt": now,
+        "updatedAt": now,
+        "metadata": core["metadata"],
+        "theme": core["theme"],
+        "layout": core["layout"],
+        "sections": core["sections"],
+        "seo": core.get("seo", {}),
+        "deploy_readiness": core.get("deploy_readiness", {}),
+    }
+
 # --- Ping ---
 @app.get("/ping")
 def ping():
@@ -37,18 +251,19 @@ def ping():
 
 # --- CREDITS API ---
 @app.get("/api/credits/balance")
-def get_credit_balance(user_id: str = Depends(get_current_user)):
+def get_credit_balance(userId: Optional[str] = Query(default=None)):
+    """Solde crédits ; passez userId (UID Firebase) depuis le frontend."""
+    uid = userId or "test-user-id"
     try:
-        res = supabase.table("user_credits").select("balance").eq("user_id", user_id).execute()
+        res = supabase.table("user_credits").select("balance").eq("user_id", uid).execute()
         if not res.data:
-            # Create user credits if none exist
-            new_credits = {"user_id": user_id, "balance": 50}
+            new_credits = {"user_id": uid, "balance": 50}
             supabase.table("user_credits").insert(new_credits).execute()
             return {"balance": 50}
         return {"balance": res.data[0]["balance"]}
     except Exception as e:
         print(f"Db error: {e}")
-        return {"balance": 50} # Return 50 gracefully if db falls through
+        return {"balance": 50}
 
 # --- COACH IA API ---
 @app.post("/api/coach/chat")
@@ -108,6 +323,89 @@ def coach_chat(request: ChatRequest):
          print(f"Error logging db transactions: {e}")
 
     return {"response": answer, "credits_remaining": balance - 1}
+
+
+# --- Génération portfolio IA ---
+@app.post("/api/portfolios/generate")
+def generate_portfolio_ai(req: PortfolioGenerateRequest):
+    user_id = req.userId or "test-user-id"
+    balance = _get_credit_balance(user_id)
+    if balance < AI_PORTFOLIO_CREDIT_COST:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Crédits insuffisants ({AI_PORTFOLIO_CREDIT_COST} requis pour une génération IA)",
+        )
+
+    if not GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="Clé API Gemini non configurée sur le serveur",
+        )
+
+    prompt = _build_portfolio_generation_prompt(req)
+
+    try:
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(
+            prompt,
+            generation_config=genai.GenerationConfig(
+                response_mime_type="application/json",
+                temperature=0.65,
+            ),
+        )
+        raw_text = (response.text or "").strip()
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError as e:
+        print(f"Portfolio AI JSON parse error: {e}")
+        raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON)")
+    except Exception as e:
+        print(f"Portfolio AI Gemini error: {e}")
+        raise HTTPException(status_code=502, detail="Erreur lors de la génération par l'IA")
+
+    if not isinstance(parsed, dict):
+        raise HTTPException(status_code=502, detail="Format de réponse IA inattendu")
+
+    core = _normalize_generated_portfolio(parsed, req)
+
+    row = {
+        "user_id": user_id,
+        "title": req.title,
+        "template": "ai",
+        "content_json": {"pending": True},
+        "slug": req.slug[:48],
+        "status": "draft",
+    }
+
+    try:
+        ins = supabase.table("portfolios").insert(row).execute()
+        if not ins.data:
+            raise HTTPException(status_code=500, detail="Échec enregistrement portfolio")
+        portfolio_id = str(ins.data[0]["id"])
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Portfolio insert error: {e}")
+        raise HTTPException(status_code=500, detail="Erreur base de données lors de la sauvegarde")
+
+    draft = _draft_from_core(portfolio_id, req, core)
+    try:
+        supabase.table("portfolios").update({"content_json": draft}).eq("id", portfolio_id).execute()
+    except Exception as e:
+        print(f"Portfolio content update error: {e}")
+        raise HTTPException(status_code=500, detail="Erreur lors de l'enregistrement du contenu généré")
+
+    new_balance = _debit_credits(
+        user_id,
+        balance,
+        AI_PORTFOLIO_CREDIT_COST,
+        "Génération portfolio IA",
+    )
+
+    return {
+        "portfolio_id": portfolio_id,
+        "credits_remaining": new_balance,
+        "draft": draft,
+    }
 
 
 # --- CRUD Portfolios ---

@@ -154,3 +154,11 @@ export function loadPortfolioDraft(id?: string | null) {
 export function listPortfolioDraftSections(draft: PortfolioDraft) {
   return draft.sections.filter(section => section.isVisible);
 }
+
+/** Brouillon renvoyé par POST /api/portfolios/generate — déjà complet, prêt pour localStorage + éditeur. */
+export function assertPortfolioDraft(data: unknown): PortfolioDraft | null {
+  if (!data || typeof data !== 'object') return null;
+  const d = data as PortfolioDraft;
+  if (!d.id || !Array.isArray(d.sections) || !d.metadata) return null;
+  return d;
+}

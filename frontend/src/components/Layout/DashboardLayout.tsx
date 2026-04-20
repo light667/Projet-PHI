@@ -45,15 +45,15 @@ export default function DashboardLayout() {
   ];
 
   const getBreadcrumb = () => {
-    switch (location.pathname) {
-      case '/dashboard': return 'Vue d\'ensemble';
-      case '/dashboard/coach': return 'Coach IA';
-      case '/dashboard/portfolios': return 'Portfolios';
-      case '/dashboard/credits': return 'Crédits';
-      case '/dashboard/settings': return 'Paramètres';
-      case '/dashboard/create/template': return 'Nouveau Portfolio';
-      default: return 'Dashboard';
-    }
+    const p = location.pathname;
+    if (p === '/dashboard') return 'Vue d\'ensemble';
+    if (p === '/dashboard/coach') return 'Coach IA';
+    if (p === '/dashboard/portfolios') return 'Portfolios';
+    if (p === '/dashboard/credits') return 'Crédits';
+    if (p === '/dashboard/settings') return 'Paramètres';
+    if (p === '/dashboard/create/template') return 'Nouveau Portfolio (template)';
+    if (p === '/dashboard/create/ai') return 'Nouveau Portfolio (IA)';
+    return 'Dashboard';
   };
 
   const TopNavContent = () => (

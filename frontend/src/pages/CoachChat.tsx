@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Send, Bot, User, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../contexts/AuthContext.js';
+import { apiUrl } from '../lib/api.js';
 
 type Message = {
   id: string;
@@ -12,6 +14,7 @@ type Message = {
 
 export default function CoachChat() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -20,7 +23,9 @@ export default function CoachChat() {
 
   // Fetch user credits on mount
   useEffect(() => {
-    fetch('http://localhost:8000/api/credits/balance', {
+    const uid = user?.uid;
+    const q = uid ? `?userId=${encodeURIComponent(uid)}` : '';
+    fetch(apiUrl(`/api/credits/balance${q}`), {
       headers: { 'Content-Type': 'application/json' }
     })
       .then(r => r.json())
@@ -30,7 +35,7 @@ export default function CoachChat() {
         }
       })
       .catch(console.error);
-  }, []);
+  }, [user?.uid]);
 
   // Initial welcome message
   useEffect(() => {
@@ -72,13 +77,13 @@ export default function CoachChat() {
       // Optimistic update
       setCredits(prev => Math.max(0, prev - 1));
 
-      const res = await fetch('http://localhost:8000/api/coach/chat', {
+      const res = await fetch(apiUrl('/api/coach/chat'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: 'test-user-id',
+          userId: user?.uid ?? 'test-user-id',
           message: content.trim(),
           history: messages.filter(m => m.id !== 'welcome').map(m => ({
             role: m.role,

@@ -15,6 +15,7 @@ const Privacy = lazy(() => import('./pages/Privacy.js'));
 const Terms = lazy(() => import('./pages/Terms.js'));
 const NotFound = lazy(() => import('./pages/NotFound.js'));
 const CreateFromTemplate = lazy(() => import('./pages/CreateFromTemplate.js'));
+const CreateWithAI = lazy(() => import('./pages/CreateWithAI.js'));
 const EditorLayout = lazy(() => import('./pages/EditorLayout.js'));
 const CoachChat = lazy(() => import('./pages/CoachChat.js'));
 const Credits = lazy(() => import('./pages/Credits.js'));
@@ -84,6 +85,7 @@ function App() {
                 <Route path="settings" element={<Settings />} />
                 <Route path="portfolios" element={<div className="h-full flex items-center justify-center text-[var(--text2)] flex-col gap-4"><span>Liste des portfolios (Bientôt)</span><p className="text-sm">Vous pourrez gérer vos portfolios ici et les lier à un nom de domaine personnalisé.</p></div>} />
                 <Route path="create/template" element={<CreateFromTemplate />} />
+                <Route path="create/ai" element={<CreateWithAI />} />
               </Route>
               <Route 
                 path="/dashboard/editor/:id" 

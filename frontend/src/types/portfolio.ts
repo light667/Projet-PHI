@@ -34,4 +34,7 @@ export interface PortfolioData {
   theme: PortfolioTheme;
   layout: PortfolioLayout;
   sections: PortfolioSection[];
+  /** Renseigné après génération IA */
+  seo?: { title?: string; description?: string };
+  deploy_readiness?: { summary?: string; checklist?: string[] };
 }

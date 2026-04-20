@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
+import { apiUrl } from '../lib/api.js';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { 
@@ -19,8 +20,10 @@ export default function Dashboard() {
   // Simulation de récupération des crédits (à connecter au vrai backend plus tard)
   useEffect(() => {
     const fetchCredits = async () => {
+      const uid = user?.uid;
+      const q = uid ? `?userId=${encodeURIComponent(uid)}` : '';
       try {
-        const res = await fetch('http://localhost:8000/api/credits/balance', {
+        const res = await fetch(apiUrl(`/api/credits/balance${q}`), {
           headers: { 'Content-Type': 'application/json' }
         });
         if (res.ok) {
@@ -39,7 +42,7 @@ export default function Dashboard() {
       }
     };
     fetchCredits();
-  }, [user]);
+  }, [user?.uid]);
 
   return (
     <div className="pb-8 max-w-5xl mx-auto">
@@ -155,20 +158,23 @@ export default function Dashboard() {
         </Link>
 
         {/* IA Card */}
-        <div className="bg-[var(--surface)] border border-[var(--border-color)] rounded-[20px] p-6 relative overflow-hidden group">
+        <Link to="/dashboard/create/ai" className="bg-[var(--surface)] border border-[var(--border-color)] rounded-[20px] p-6 relative overflow-hidden group hover:shadow-md transition-shadow cursor-pointer block">
           <div className="absolute top-6 right-6 text-xs font-bold bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 py-1 px-3 rounded-full border border-indigo-200 dark:border-indigo-800 z-10">
             {t('dashboard.credits_cost_ai')}
           </div>
-          <div className="flex items-center gap-4 mb-4 relative z-10 opacity-60">
+          <div className="flex items-center gap-4 mb-4 relative z-10">
             <div className="p-3 bg-indigo-100 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 rounded-xl">
               <Sparkles size={24} />
             </div>
             <div>
-              <h3 className="font-bold text-[var(--text)]">{t('dashboard.ai_mode')} <span className="ml-2 text-[10px] bg-slate-200 text-slate-800 px-2 py-0.5 rounded uppercase leading-none">Bientôt</span></h3>
+              <h3 className="font-bold text-[var(--text)]">{t('dashboard.ai_mode')}</h3>
               <p className="text-sm text-[var(--text2)] mt-1">{t('dashboard.ai_mode_desc')}</p>
             </div>
           </div>
-        </div>
+          <span className="inline-flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400">
+            {t('dashboard.ai_cta')} <ArrowRight size={16} />
+          </span>
+        </Link>
       </div>
     </div>
   );
