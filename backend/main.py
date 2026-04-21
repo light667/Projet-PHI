@@ -28,10 +28,10 @@ app = FastAPI(title="Phi API")
 
 
 def _cors_allow_origins() -> list[str]:
-    """Liste depuis CORS_ORIGINS (virgules). Défaut : Firebase Hosting + Vite local."""
+    """Liste depuis CORS_ORIGINS (virgules). Même défaut que render.yaml / Render dashboard."""
     default = (
         "https://phi-org.web.app,"
-        "http://localhost:5173,http://127.0.0.1:5173,http://localhost:4173"
+        "http://localhost:5173,http://127.0.0.1:5173"
     )
     raw = os.getenv("CORS_ORIGINS", default).strip()
     if raw == "*":
