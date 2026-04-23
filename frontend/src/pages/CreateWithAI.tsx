@@ -15,7 +15,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
-import { apiUrl } from '../lib/api.js';
+import { apiUrl, wakeBackend, fetchWithTimeout } from '../lib/api.js';
 import { savePortfolioDraft, toSlug, assertPortfolioDraft, type PortfolioVisibility } from '../lib/portfolioDraft.js';
 
 const AI_DOMAINS = [
@@ -73,6 +73,7 @@ export default function CreateWithAI() {
   const [visibility, setVisibility] = useState<PortfolioVisibility>('public');
 
   const [generating, setGenerating] = useState(false);
+  const [waking, setWaking] = useState(false);
   const [apiError, setApiError] = useState('');
 
   useEffect(() => {
@@ -189,13 +190,33 @@ export default function CreateWithAI() {
     if (!validateSlug(slug)) return;
     if (!canAdvance()) return;
 
+    // Phase 1: Wake up Render backend (free tier may be sleeping)
+    setWaking(true);
     setGenerating(true);
     try {
-      const res = await fetch(apiUrl('/api/portfolios/generate'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(buildPayload()),
-      });
+      const alive = await wakeBackend(3, 4000);
+      if (!alive) {
+        setApiError(t('ai_portfolio.error_server_sleep'));
+        setGenerating(false);
+        setWaking(false);
+        return;
+      }
+    } catch {
+      // Best-effort wake — continue even if ping fails
+    }
+    setWaking(false);
+
+    // Phase 2: Generate portfolio
+    try {
+      const res = await fetchWithTimeout(
+        apiUrl('/api/portfolios/generate'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(buildPayload()),
+        },
+        120_000,
+      );
 
       const raw = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -219,10 +240,15 @@ export default function CreateWithAI() {
 
       savePortfolioDraft(draft);
       navigate(`/dashboard/editor/${draft.id}`);
-    } catch {
-      setApiError(t('ai_portfolio.error_network'));
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setApiError(t('ai_portfolio.error_timeout'));
+      } else {
+        setApiError(t('ai_portfolio.error_network'));
+      }
     } finally {
       setGenerating(false);
+      setWaking(false);
     }
   };
 
@@ -541,7 +567,7 @@ export default function CreateWithAI() {
                 {generating ? (
                   <>
                     <Loader2 className="animate-spin" size={20} />
-                    {t('ai_portfolio.generating')}
+                    {waking ? t('ai_portfolio.waking') : t('ai_portfolio.generating')}
                   </>
                 ) : (
                   <>

@@ -216,6 +216,9 @@ const resources = {
         error_generic: "La génération a échoué.",
         error_draft: "Réponse serveur invalide.",
         error_network: "Impossible de joindre le serveur.",
+        error_server_sleep: "Le serveur met du temps à démarrer. Réessayez dans quelques secondes.",
+        error_timeout: "La génération a pris trop de temps. Réessayez — le serveur est maintenant réveillé.",
+        waking: "Réveil du serveur…",
         domains: {
           dev: "Développement",
           design: "Design UX/UI",
@@ -476,6 +479,9 @@ const resources = {
         error_generic: "Generation failed.",
         error_draft: "Invalid server response.",
         error_network: "Could not reach the server.",
+        error_server_sleep: "The server is waking up. Please retry in a few seconds.",
+        error_timeout: "Generation took too long. Retry — the server should be awake now.",
+        waking: "Waking up server…",
         domains: {
           dev: "Development",
           design: "UX/UI design",

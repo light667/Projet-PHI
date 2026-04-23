@@ -1,4 +1,6 @@
 from typing import Optional
+import logging
+import traceback
 
 from fastapi import FastAPI, HTTPException, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,8 +15,12 @@ import google.generativeai as genai
 
 load_dotenv()
 
-from db import supabase
+from db import supabase, get_supabase
 from schemas import PortfolioCreate, PortfolioUpdate, ChatRequest, PortfolioGenerateRequest
+
+# --- Logging ---
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger("phi-api")
 
 AI_PORTFOLIO_CREDIT_COST = 10
 ALLOWED_SECTION_TYPES = frozenset({"hero", "about", "gallery", "contact", "projects", "custom"})
@@ -23,8 +29,27 @@ ALLOWED_SECTION_TYPES = frozenset({"hero", "about", "gallery", "contact", "proje
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
-    
+    logger.info("Gemini API key loaded (length=%d)", len(GEMINI_API_KEY))
+else:
+    logger.warning("GEMINI_API_KEY is NOT set — AI features will fail")
+
 app = FastAPI(title="Phi API")
+
+
+@app.on_event("startup")
+def startup_diagnostics():
+    """Log configuration status on startup to ease debugging on Render."""
+    logger.info("=== Phi API starting ===")
+    logger.info("SUPABASE_URL set: %s", bool(os.getenv("SUPABASE_URL")))
+    logger.info("SUPABASE_SERVICE_ROLE_KEY set: %s", bool(os.getenv("SUPABASE_SERVICE_ROLE_KEY")))
+    logger.info("GEMINI_API_KEY set: %s", bool(GEMINI_API_KEY))
+    logger.info("CORS_ORIGINS: %s", os.getenv("CORS_ORIGINS", "(default)"))
+    # Eagerly test Supabase connection
+    try:
+        get_supabase()
+        logger.info("Supabase client: OK")
+    except Exception as e:
+        logger.error("Supabase client FAILED: %s", e)
 
 
 def _cors_allow_origins() -> list[str]:
@@ -247,7 +272,7 @@ def _draft_from_core(portfolio_id: str, req: PortfolioGenerateRequest, core: dic
 # --- Ping ---
 @app.get("/ping")
 def ping():
-    return {"status": "ok"}
+    return {"status": "ok", "gemini": bool(GEMINI_API_KEY)}
 
 # --- CREDITS API ---
 @app.get("/api/credits/balance")
@@ -343,6 +368,7 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest):
         )
 
     prompt = _build_portfolio_generation_prompt(req)
+    logger.info("Generating portfolio for user=%s slug=%s domain=%s", user_id, req.slug, req.domain)
 
     try:
         model = genai.GenerativeModel("gemini-2.5-flash")
@@ -352,17 +378,37 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest):
                 response_mime_type="application/json",
                 temperature=0.65,
             ),
+            request_options={"timeout": 120},
         )
+
+        # Safety check — Gemini may block content
+        if not response.parts:
+            block_reason = getattr(response.prompt_feedback, "block_reason", "unknown")
+            logger.warning("Gemini response blocked: %s", block_reason)
+            raise HTTPException(
+                status_code=422,
+                detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
+            )
+
         raw_text = (response.text or "").strip()
+        logger.info("Gemini raw response length: %d chars", len(raw_text))
+
+        if not raw_text:
+            raise HTTPException(status_code=502, detail="L'IA a renvoyé une réponse vide")
+
         parsed = json.loads(raw_text)
+
+    except HTTPException:
+        raise
     except json.JSONDecodeError as e:
-        print(f"Portfolio AI JSON parse error: {e}")
-        raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON)")
+        logger.error("Portfolio AI JSON parse error: %s — raw[:500]: %s", e, raw_text[:500])
+        raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON). Réessayez.")
     except Exception as e:
-        print(f"Portfolio AI Gemini error: {e}")
-        raise HTTPException(status_code=502, detail="Erreur lors de la génération par l'IA")
+        logger.error("Portfolio AI Gemini error: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(status_code=502, detail=f"Erreur IA: {type(e).__name__}: {e}")
 
     if not isinstance(parsed, dict):
+        logger.error("Gemini returned non-dict: %s", type(parsed))
         raise HTTPException(status_code=502, detail="Format de réponse IA inattendu")
 
     core = _normalize_generated_portfolio(parsed, req)
