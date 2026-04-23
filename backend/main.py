@@ -390,6 +390,7 @@ def coach_chat(request: ChatRequest):
 # --- Génération portfolio IA ---
 @app.post("/api/portfolios/generate")
 def generate_portfolio_ai(req: PortfolioGenerateRequest):
+    logger.info(">>> REQUÊTE DE GÉNÉRATION REÇUE - User: %s, Slug: %s", req.userId, req.slug)
     try:
         user_id = req.userId or "test-user-id"
         
