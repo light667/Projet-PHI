@@ -119,6 +119,15 @@ def _build_portfolio_generation_prompt(req: PortfolioGenerateRequest) -> str:
     social = req.social.model_dump(exclude_none=True)
     social_txt = json.dumps(social, ensure_ascii=False) if social else "{}"
 
+    skills_txt = ", ".join(req.skills) if req.skills else "(non précisées)"
+    experiences_txt = "\n".join([f"- {e}" for e in req.experiences]) if req.experiences else "(non précisées)"
+    
+    services_instruction = ""
+    if req.ai_propose_services:
+        services_instruction = f"IMPORTANT: Propose une liste de 3 à 5 services professionnels pertinents basés sur les compétences suivantes : {skills_txt}. "
+    elif req.services:
+        services_instruction = f"Services à inclure : {', '.join(req.services)}. "
+
     return f"""Tu es un expert en portfolios web professionnels et en copywriting carrière.
 À partir des informations utilisateur ci-dessous, produis UN SEUL objet JSON valide (sans markdown, sans texte autour) avec cette structure exacte :
 {{
@@ -158,8 +167,12 @@ Règles pour "content" des sections :
 - hero: headline, subheadline, ctaPrimary, ctaSecondary (optionnel), tags (liste de mots-clés)
 - about: title, body (2-4 paragraphes, ton {req.tone}), highlights (liste de 4-6 puces courtes)
 - projects: title, intro (phrase), items: [{{ "name", "description", "url", "tags": [] }}] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
-- contact: title, email, phone, location, links: [{{ "label", "url" }}]
-- custom: optionnel, pour témoignages ou compétences techniques si pertinent
+- contact: title, email, phone, whatsapp, location, links: [{{ "label", "url" }}]
+- custom: peut être utilisé pour "Services", "Compétences" ou "Expériences". 
+  Exemple pour Services: {{"title": "Mes Services", "items": [{"title": "Nom du service", "description": "Détails"}]}}
+  Exemple pour Compétences: {{"title": "Compétences", "skills": ["React", "Python"]}}
+
+{services_instruction}
 
 Domaine métier (slug): {req.domain}
 Ton rédactionnel: {req.tone}
@@ -172,14 +185,17 @@ Nom: {req.full_name}
 Titre / rôle: {req.professional_title}
 Email: {req.email or "non fourni"}
 Téléphone: {req.phone or "non fourni"}
+WhatsApp: {req.whatsapp or "non fourni"}
 Localisation: {req.location or "non fournie"}
-Réseaux & liens (JSON): {social_txt}
 Bio / parcours: {req.bio}
+Compétences: {skills_txt}
+Expériences:
+{experiences_txt}
 Années d'expérience: {req.years_experience if req.years_experience is not None else "non précisé"}
 Projets fournis:
 {projects_txt}
 
-Le champ metadata.author doit être "{req.full_name}".
+Le champ metadata.author must be "{req.full_name}".
 Le contenu doit être en français professionnel sauf si le profil indique clairement une audience anglophone.
 """
 
@@ -370,42 +386,60 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest):
     prompt = _build_portfolio_generation_prompt(req)
     logger.info("Generating portfolio for user=%s slug=%s domain=%s", user_id, req.slug, req.domain)
 
-    try:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(
-            prompt,
-            generation_config=genai.GenerationConfig(
-                response_mime_type="application/json",
-                temperature=0.65,
-            ),
-            request_options={"timeout": 120},
-        )
+    import time
 
-        # Safety check — Gemini may block content
-        if not response.parts:
-            block_reason = getattr(response.prompt_feedback, "block_reason", "unknown")
-            logger.warning("Gemini response blocked: %s", block_reason)
-            raise HTTPException(
-                status_code=422,
-                detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
+    MAX_RETRIES = 3
+    RETRY_WAIT = 20  # seconds — Gemini free tier resets per-minute quotas
+
+    raw_text = ""
+    parsed = None
+    last_error = None
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            response = model.generate_content(
+                prompt,
+                generation_config=genai.GenerationConfig(
+                    response_mime_type="application/json",
+                    temperature=0.65,
+                ),
+                request_options={"timeout": 120},
             )
 
-        raw_text = (response.text or "").strip()
-        logger.info("Gemini raw response length: %d chars", len(raw_text))
+            # Safety check — Gemini may block content
+            if not response.parts:
+                block_reason = getattr(response.prompt_feedback, "block_reason", "unknown")
+                logger.warning("Gemini response blocked: %s", block_reason)
+                raise HTTPException(
+                    status_code=422,
+                    detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
+                )
 
-        if not raw_text:
-            raise HTTPException(status_code=502, detail="L'IA a renvoyé une réponse vide")
+            raw_text = (response.text or "").strip()
+            logger.info("Gemini raw response length: %d chars (attempt %d)", len(raw_text), attempt)
 
-        parsed = json.loads(raw_text)
+            if not raw_text:
+                raise HTTPException(status_code=502, detail="L'IA a renvoyé une réponse vide")
 
-    except HTTPException:
-        raise
-    except json.JSONDecodeError as e:
-        logger.error("Portfolio AI JSON parse error: %s — raw[:500]: %s", e, raw_text[:500])
-        raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON). Réessayez.")
-    except Exception as e:
-        logger.error("Portfolio AI Gemini error: %s\n%s", e, traceback.format_exc())
-        raise HTTPException(status_code=502, detail=f"Erreur IA: {type(e).__name__}: {e}")
+            parsed = json.loads(raw_text)
+            break  # Success — exit retry loop
+
+        except HTTPException:
+            raise
+        except json.JSONDecodeError as e:
+            logger.error("Portfolio AI JSON parse error: %s — raw[:500]: %s", e, raw_text[:500])
+            raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON). Réessayez.")
+        except Exception as e:
+            last_error = e
+            err_str = str(e).lower()
+            is_rate_limit = "429" in err_str or "resourceexhausted" in err_str or "quota" in err_str
+            if is_rate_limit and attempt < MAX_RETRIES:
+                logger.warning("Gemini rate-limited (attempt %d/%d). Retrying in %ds…", attempt, MAX_RETRIES, RETRY_WAIT)
+                time.sleep(RETRY_WAIT)
+                continue
+            logger.error("Portfolio AI Gemini error (attempt %d): %s\n%s", attempt, e, traceback.format_exc())
+            raise HTTPException(status_code=502, detail=f"Erreur IA: {type(e).__name__}: {e}")
 
     if not isinstance(parsed, dict):
         logger.error("Gemini returned non-dict: %s", type(parsed))
@@ -505,6 +539,17 @@ def update_portfolio(portfolio_id: str, update: PortfolioUpdate, user_id: str = 
     data = {k: v for k, v in update.dict().items() if v is not None}
     result = supabase.table("portfolios").update(data).eq("id", portfolio_id).execute()
     return result.data[0]
+
+@app.get("/api/portfolios/by-slug/{slug}")
+def get_portfolio_by_slug(slug: str):
+    """Récupère un portfolio public par son slug."""
+    result = supabase.table("portfolios").select("*").eq("slug", slug).execute()
+    if not result.data:
+        raise HTTPException(404, "Portfolio non trouvé")
+    
+    portfolio = result.data[0]
+    # Optionnel: Vérifier si le portfolio est public ici ou dans le content_json
+    return portfolio
 
 @app.delete("/api/portfolios/{portfolio_id}")
 def delete_portfolio(portfolio_id: str, user_id: str = Depends(get_current_user)):

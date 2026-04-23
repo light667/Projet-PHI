@@ -183,7 +183,7 @@ export default function DashboardLayout() {
                 <LogOut size={18} />
               </button>
               
-              <Link to="/dashboard/create/template">
+              <Link to="/dashboard/create">
                 <button className="hidden sm:flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm ml-2">
                   <Plus size={16} />
                   Nouveau

@@ -126,7 +126,7 @@ export default function Dashboard() {
             {t('dashboard.portfolio_desc')}
           </p>
 
-          <Link to="/dashboard/create/template">
+          <Link to="/dashboard/create">
             <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl transition-colors flex items-center justify-center gap-2">
               {t('dashboard.portfolio_cta')} <ArrowRight size={18} />
             </button>

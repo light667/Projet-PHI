@@ -1,1 +1,0 @@
-const e="https://phi-api-dt94.onrender.com";function i(){const t="https://phi-api-dt94.onrender.com";return t.trim()?t.replace(/\/$/,""):e}function o(t){const r=i(),n=t.startsWith("/")?t:`/${t}`;return`${r}${n}`}export{o as a};

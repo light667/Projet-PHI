@@ -46,13 +46,18 @@ class PortfolioGenerateRequest(BaseModel):
     professional_title: str = Field(..., min_length=1, max_length=120)
     email: str = ""
     phone: str = ""
+    whatsapp: Optional[str] = None
     location: str = ""
     social: SocialLinks = SocialLinks()
 
     bio: str = Field(..., min_length=20, max_length=8000)
+    skills: List[str] = Field(default_factory=list)
+    experiences: List[str] = Field(default_factory=list)
     years_experience: Optional[int] = Field(default=None, ge=0, le=60)
 
     projects: List[ProjectInput] = Field(default_factory=list, max_length=12)
+    services: List[str] = Field(default_factory=list)
+    ai_propose_services: bool = False
 
     tone: str = Field(default="professional", pattern=r"^(professional|creative|minimal)$")
     theme_variant: str = Field(default="light", pattern=r"^(light|dark)$")

@@ -20,6 +20,8 @@ const EditorLayout = lazy(() => import('./pages/EditorLayout.js'));
 const CoachChat = lazy(() => import('./pages/CoachChat.js'));
 const Credits = lazy(() => import('./pages/Credits.js'));
 const Settings = lazy(() => import('./pages/Settings.js'));
+const CreateChoice = lazy(() => import('./pages/CreateChoice.js'));
+const PortfolioViewer = lazy(() => import('./pages/PortfolioViewer.js'));
 
 // Loading fallback
 function PageLoader() {
@@ -84,6 +86,7 @@ function App() {
                 <Route path="credits" element={<Credits />} />
                 <Route path="settings" element={<Settings />} />
                 <Route path="portfolios" element={<div className="h-full flex items-center justify-center text-[var(--text2)] flex-col gap-4"><span>Liste des portfolios (Bientôt)</span><p className="text-sm">Vous pourrez gérer vos portfolios ici et les lier à un nom de domaine personnalisé.</p></div>} />
+                <Route path="create" element={<CreateChoice />} />
                 <Route path="create/template" element={<CreateFromTemplate />} />
                 <Route path="create/ai" element={<CreateWithAI />} />
               </Route>
@@ -103,6 +106,7 @@ function App() {
                   </ProtectedRoute>
                 } 
               />
+              <Route path="/p/:slug" element={<PortfolioViewer />} />
               {/* Catch-all: 404 */}
               <Route path="*" element={<NotFound />} />
             </Routes>
