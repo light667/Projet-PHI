@@ -53,14 +53,16 @@ def startup_diagnostics():
 
 
 def _cors_allow_origins() -> list[str]:
-    """Liste depuis CORS_ORIGINS (virgules). Même défaut que render.yaml / Render dashboard."""
+    """Liste depuis CORS_ORIGINS (virgules)."""
     default = (
         "https://phi-org.web.app,"
+        "https://phi-org.firebaseapp.com,"
         "http://localhost:5173,http://127.0.0.1:5173"
     )
     raw = os.getenv("CORS_ORIGINS", default).strip()
     if raw == "*":
         return ["*"]
+    # Nettoyage rigoureux des origines
     origins = [o.strip().rstrip("/") for o in raw.split(",") if o.strip()]
     return origins if origins else ["*"]
 
@@ -75,7 +77,16 @@ app.add_middleware(
     allow_credentials=_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_origin_middleware(request, call_next):
+    origin = request.headers.get("origin")
+    if origin:
+        logger.info("Incoming request from origin: %s", origin)
+    response = await call_next(request)
+    return response
 
 # --- Authentication Mock ---
 def get_current_user(user_id: str = "test-user-id"):
@@ -85,6 +96,13 @@ def get_current_user(user_id: str = "test-user-id"):
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
+# --- User Synchronization Helper ---
+def _ensure_user_exists(user_id: str, email: str = None, full_name: str = None):
+    """
+    Désactivé car la table 'users' est absente ou gérée par Firebase.
+    """
+    pass
 
 def _get_credit_balance(user_id: str) -> int:
     try:
@@ -166,11 +184,11 @@ def _build_portfolio_generation_prompt(req: PortfolioGenerateRequest) -> str:
 Règles pour "content" des sections :
 - hero: headline, subheadline, ctaPrimary, ctaSecondary (optionnel), tags (liste de mots-clés)
 - about: title, body (2-4 paragraphes, ton {req.tone}), highlights (liste de 4-6 puces courtes)
-- projects: title, intro (phrase), items: [{{ "name", "description", "url", "tags": [] }}] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
-- contact: title, email, phone, whatsapp, location, links: [{{ "label", "url" }}]
+- projects: title, intro (phrase), items: [{{ "name": "...", "description": "...", "url": "...", "tags": [] }}] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
+- contact: title, email, phone, whatsapp, location, links: [{{ "label": "...", "url": "..." }}]
 - custom: peut être utilisé pour "Services", "Compétences" ou "Expériences". 
-  Exemple pour Services: {{"title": "Mes Services", "items": [{"title": "Nom du service", "description": "Détails"}]}}
-  Exemple pour Compétences: {{"title": "Compétences", "skills": ["React", "Python"]}}
+  Exemple pour Services: {{ "title": "Mes Services", "items": [{{ "title": "Nom du service", "description": "Détails" }}] }}
+  Exemple pour Compétences: {{ "title": "Compétences", "skills": ["React", "Python"] }}
 
 {services_instruction}
 
@@ -311,6 +329,9 @@ def get_credit_balance(userId: Optional[str] = Query(default=None)):
 def coach_chat(request: ChatRequest):
     user_id = request.userId or "test-user-id"
     
+    # Synchronisation
+    _ensure_user_exists(user_id)
+    
     # 1. Vérifier les crédits
     try:
         credits_res = supabase.table("user_credits").select("balance").eq("user_id", user_id).execute()
@@ -326,7 +347,7 @@ def coach_chat(request: ChatRequest):
          answer = "Clé API Gemini non configurée ! Je ne peux pas vous répondre pour l'instant."
     else:
         try:
-            model = genai.GenerativeModel('gemini-2.5-flash')
+            model = genai.GenerativeModel('gemini-flash-latest')
             
             # Format history for Gemini
             messages = [{"role": "user", "parts": ["Tu es le Coach IA de Phi. Tu aides l'utilisateur pour sa carrière, son CV, et des simulations d'entretiens."]}]
@@ -369,123 +390,134 @@ def coach_chat(request: ChatRequest):
 # --- Génération portfolio IA ---
 @app.post("/api/portfolios/generate")
 def generate_portfolio_ai(req: PortfolioGenerateRequest):
-    user_id = req.userId or "test-user-id"
-    balance = _get_credit_balance(user_id)
-    if balance < AI_PORTFOLIO_CREDIT_COST:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Crédits insuffisants ({AI_PORTFOLIO_CREDIT_COST} requis pour une génération IA)",
-        )
-
-    if not GEMINI_API_KEY:
-        raise HTTPException(
-            status_code=503,
-            detail="Clé API Gemini non configurée sur le serveur",
-        )
-
-    prompt = _build_portfolio_generation_prompt(req)
-    logger.info("Generating portfolio for user=%s slug=%s domain=%s", user_id, req.slug, req.domain)
-
-    import time
-
-    MAX_RETRIES = 3
-    RETRY_WAIT = 20  # seconds — Gemini free tier resets per-minute quotas
-
-    raw_text = ""
-    parsed = None
-    last_error = None
-
-    for attempt in range(1, MAX_RETRIES + 1):
-        try:
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    response_mime_type="application/json",
-                    temperature=0.65,
-                ),
-                request_options={"timeout": 120},
+    try:
+        user_id = req.userId or "test-user-id"
+        
+        # Synchronisation utilisateur Firebase -> Supabase
+        _ensure_user_exists(user_id, req.email, req.full_name)
+        
+        balance = _get_credit_balance(user_id)
+        if balance < AI_PORTFOLIO_CREDIT_COST:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Crédits insuffisants ({AI_PORTFOLIO_CREDIT_COST} requis pour une génération IA)",
             )
 
-            # Safety check — Gemini may block content
-            if not response.parts:
-                block_reason = getattr(response.prompt_feedback, "block_reason", "unknown")
-                logger.warning("Gemini response blocked: %s", block_reason)
-                raise HTTPException(
-                    status_code=422,
-                    detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
+        if not GEMINI_API_KEY:
+            raise HTTPException(
+                status_code=503,
+                detail="Clé API Gemini non configurée sur le serveur",
+            )
+
+        prompt = _build_portfolio_generation_prompt(req)
+        logger.info("Generating portfolio for user=%s slug=%s domain=%s", user_id, req.slug, req.domain)
+
+        import time
+
+        MAX_RETRIES = 3
+        RETRY_WAIT = 20  # seconds — Gemini free tier resets per-minute quotas
+
+        raw_text = ""
+        parsed = None
+        last_error = None
+
+        for attempt in range(1, MAX_RETRIES + 1):
+            try:
+                model = genai.GenerativeModel("gemini-flash-latest")
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        response_mime_type="application/json",
+                        temperature=0.65,
+                    ),
+                    request_options={"timeout": 120},
                 )
 
-            raw_text = (response.text or "").strip()
-            logger.info("Gemini raw response length: %d chars (attempt %d)", len(raw_text), attempt)
+                # Safety check — Gemini may block content
+                if not response.parts:
+                    block_reason = getattr(response.prompt_feedback, "block_reason", "unknown")
+                    logger.warning("Gemini response blocked: %s", block_reason)
+                    raise HTTPException(
+                        status_code=422,
+                        detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
+                    )
 
-            if not raw_text:
-                raise HTTPException(status_code=502, detail="L'IA a renvoyé une réponse vide")
+                raw_text = (response.text or "").strip()
+                logger.info("Gemini raw response length: %d chars (attempt %d)", len(raw_text), attempt)
 
-            parsed = json.loads(raw_text)
-            break  # Success — exit retry loop
+                if not raw_text:
+                    raise HTTPException(status_code=502, detail="L'IA a renvoyé une réponse vide")
 
+                parsed = json.loads(raw_text)
+                break  # Success — exit retry loop
+
+            except HTTPException:
+                raise
+            except json.JSONDecodeError as e:
+                logger.error("Portfolio AI JSON parse error: %s — raw[:500]: %s", e, raw_text[:500])
+                raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON). Réessayez.")
+            except Exception as e:
+                last_error = e
+                err_str = str(e).lower()
+                is_rate_limit = "429" in err_str or "resourceexhausted" in err_str or "quota" in err_str
+                if is_rate_limit and attempt < MAX_RETRIES:
+                    logger.warning("Gemini rate-limited (attempt %d/%d). Retrying in %ds…", attempt, MAX_RETRIES, RETRY_WAIT)
+                    time.sleep(RETRY_WAIT)
+                    continue
+                logger.error("Portfolio AI Gemini error (attempt %d): %s\n%s", attempt, e, traceback.format_exc())
+                raise HTTPException(status_code=502, detail=f"Erreur IA: {type(e).__name__}: {e}")
+
+        if not isinstance(parsed, dict):
+            logger.error("Gemini returned non-dict: %s", type(parsed))
+            raise HTTPException(status_code=502, detail="Format de réponse IA inattendu")
+
+        core = _normalize_generated_portfolio(parsed, req)
+
+        row = {
+            "user_id": user_id,
+            "title": req.title,
+            "template": "ai",
+            "content_json": {"pending": True},
+            "slug": req.slug[:48],
+            "status": "draft",
+        }
+
+        try:
+            ins = supabase.table("portfolios").insert(row).execute()
+            if not ins.data:
+                raise HTTPException(status_code=500, detail="Échec enregistrement portfolio")
+            portfolio_id = str(ins.data[0]["id"])
         except HTTPException:
             raise
-        except json.JSONDecodeError as e:
-            logger.error("Portfolio AI JSON parse error: %s — raw[:500]: %s", e, raw_text[:500])
-            raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON). Réessayez.")
         except Exception as e:
-            last_error = e
-            err_str = str(e).lower()
-            is_rate_limit = "429" in err_str or "resourceexhausted" in err_str or "quota" in err_str
-            if is_rate_limit and attempt < MAX_RETRIES:
-                logger.warning("Gemini rate-limited (attempt %d/%d). Retrying in %ds…", attempt, MAX_RETRIES, RETRY_WAIT)
-                time.sleep(RETRY_WAIT)
-                continue
-            logger.error("Portfolio AI Gemini error (attempt %d): %s\n%s", attempt, e, traceback.format_exc())
-            raise HTTPException(status_code=502, detail=f"Erreur IA: {type(e).__name__}: {e}")
+            print(f"Portfolio insert error: {e}")
+            raise HTTPException(status_code=500, detail="Erreur base de données lors de la sauvegarde")
 
-    if not isinstance(parsed, dict):
-        logger.error("Gemini returned non-dict: %s", type(parsed))
-        raise HTTPException(status_code=502, detail="Format de réponse IA inattendu")
+        draft = _draft_from_core(portfolio_id, req, core)
+        try:
+            supabase.table("portfolios").update({"content_json": draft}).eq("id", portfolio_id).execute()
+        except Exception as e:
+            print(f"Portfolio content update error: {e}")
+            raise HTTPException(status_code=500, detail="Erreur lors de l'enregistrement du contenu généré")
 
-    core = _normalize_generated_portfolio(parsed, req)
+        new_balance = _debit_credits(
+            user_id,
+            balance,
+            AI_PORTFOLIO_CREDIT_COST,
+            "Génération portfolio IA",
+        )
 
-    row = {
-        "user_id": user_id,
-        "title": req.title,
-        "template": "ai",
-        "content_json": {"pending": True},
-        "slug": req.slug[:48],
-        "status": "draft",
-    }
+        return {
+            "portfolio_id": portfolio_id,
+            "credits_remaining": new_balance,
+            "draft": draft,
+        }
 
-    try:
-        ins = supabase.table("portfolios").insert(row).execute()
-        if not ins.data:
-            raise HTTPException(status_code=500, detail="Échec enregistrement portfolio")
-        portfolio_id = str(ins.data[0]["id"])
-    except HTTPException:
-        raise
+    except HTTPException as he:
+        raise he
     except Exception as e:
-        print(f"Portfolio insert error: {e}")
-        raise HTTPException(status_code=500, detail="Erreur base de données lors de la sauvegarde")
-
-    draft = _draft_from_core(portfolio_id, req, core)
-    try:
-        supabase.table("portfolios").update({"content_json": draft}).eq("id", portfolio_id).execute()
-    except Exception as e:
-        print(f"Portfolio content update error: {e}")
-        raise HTTPException(status_code=500, detail="Erreur lors de l'enregistrement du contenu généré")
-
-    new_balance = _debit_credits(
-        user_id,
-        balance,
-        AI_PORTFOLIO_CREDIT_COST,
-        "Génération portfolio IA",
-    )
-
-    return {
-        "portfolio_id": portfolio_id,
-        "credits_remaining": new_balance,
-        "draft": draft,
-    }
+        logger.error("CRITICAL ERROR in generate_portfolio_ai: %s\n%s", e, traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Erreur interne: {str(e)}")
 
 
 # --- CRUD Portfolios ---
