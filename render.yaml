@@ -27,3 +27,5 @@ services:
         value: "https://phi-org.web.app"
       - key: FRONTEND_BASE_URL
         value: "https://phi-org.web.app"
+      - key: FRONTEND_BASE_URL
+        value: "https://phi-org.web.app"
