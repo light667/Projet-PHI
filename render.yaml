@@ -25,6 +25,3 @@ services:
         sync: false
       - key: FRONTEND_BASE_URL
         value: "https://phi-org.web.app"
-      - key: FRONTEND_BASE_URL
-        value: "https://phi-org.web.app"
-        value: "https://phi-org.web.app"
