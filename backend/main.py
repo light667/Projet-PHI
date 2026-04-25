@@ -2,7 +2,7 @@ from typing import Optional
 import logging
 import traceback
 
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
@@ -12,6 +12,7 @@ import re
 from datetime import datetime, timezone
 
 import google.generativeai as genai
+import requests
 
 load_dotenv()
 
@@ -27,11 +28,19 @@ ALLOWED_SECTION_TYPES = frozenset({"hero", "about", "gallery", "contact", "proje
 
 # Initialize Gemini AI
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+FRONTEND_BASE_URL = os.getenv("FRONTEND_BASE_URL", "https://phi-org.web.app")
+
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
     logger.info("Gemini API key loaded (length=%d)", len(GEMINI_API_KEY))
 else:
-    logger.warning("GEMINI_API_KEY is NOT set — AI features will fail")
+    logger.warning("GEMINI_API_KEY is NOT set — AI Gemini features will fallback to GROQ if available")
+
+if GROQ_API_KEY:
+    logger.info("Groq API key loaded (length=%d)", len(GROQ_API_KEY))
+else:
+    logger.warning("GROQ_API_KEY is NOT set — AI GROQ fallback unavailable")
 
 app = FastAPI(title="Phi API")
 
@@ -104,6 +113,44 @@ def _ensure_user_exists(user_id: str, email: str = None, full_name: str = None):
     """
     pass
 
+
+def _extract_json_object(raw_text: str) -> str | None:
+    """Extract the first JSON object from model output, even if wrapped in markdown or prose."""
+    if not raw_text or "{" not in raw_text:
+        return None
+
+    start = raw_text.find("{")
+    depth = 0
+    in_string = False
+    escape = False
+
+    for idx, ch in enumerate(raw_text[start:], start):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0:
+                return raw_text[start:idx + 1]
+
+    return None
+
+
+def _get_public_portfolio_url(slug: str) -> str:
+    base = FRONTEND_BASE_URL.rstrip('/')
+    return f"{base}/p/{slug}"
+
+
 def _get_credit_balance(user_id: str) -> int:
     try:
         res = supabase.table("user_credits").select("balance").eq("user_id", user_id).execute()
@@ -146,6 +193,16 @@ def _build_portfolio_generation_prompt(req: PortfolioGenerateRequest) -> str:
     elif req.services:
         services_instruction = f"Services à inclure : {', '.join(req.services)}. "
 
+    profile_image_instruction = (
+        f"Si l'utilisateur a fourni une photo de profil, inclue l'URL exacte dans la section hero sous la clé profileImageUrl. "
+        if req.profile_image_url else ""
+    )
+
+    domain_note = (
+        "Si le domaine est photographie, architecture, design, production audio/vidéo ou cuisine, crée une section gallery ou custom visuelle avec des images, des projets et des services. "
+        if req.domain in ("photo", "archi", "design", "marketing") else ""
+    )
+
     return f"""Tu es un expert en portfolios web professionnels et en copywriting carrière.
 À partir des informations utilisateur ci-dessous, produis UN SEUL objet JSON valide (sans markdown, sans texte autour) avec cette structure exacte :
 {{
@@ -182,15 +239,18 @@ def _build_portfolio_generation_prompt(req: PortfolioGenerateRequest) -> str:
 }}
 
 Règles pour "content" des sections :
-- hero: headline, subheadline, ctaPrimary, ctaSecondary (optionnel), tags (liste de mots-clés)
+- hero: headline, subheadline, ctaPrimary, ctaSecondary (optionnel), tags (liste de mots-clés), profileImageUrl (optionnel si fourni)
 - about: title, body (2-4 paragraphes, ton {req.tone}), highlights (liste de 4-6 puces courtes)
-- projects: title, intro (phrase), items: [{{ "name": "...", "description": "...", "url": "...", "tags": [] }}] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
-- contact: title, email, phone, whatsapp, location, links: [{{ "label": "...", "url": "..." }}]
-- custom: peut être utilisé pour "Services", "Compétences" ou "Expériences". 
-  Exemple pour Services: {{ "title": "Mes Services", "items": [{{ "title": "Nom du service", "description": "Détails" }}] }}
-  Exemple pour Compétences: {{ "title": "Compétences", "skills": ["React", "Python"] }}
+- projects: title, intro (phrase), items: [{ "name": "...", "description": "...", "url": "...", "tags": [] }] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
+- contact: title, email, phone, whatsapp, location, links: [{ "label": "...", "url": "..." }]
+- gallery: title, intro, images: [{ "url": "...", "caption": "..." }] (utile pour les portfolios visuels)
+- custom: peut être utilisé pour "Services", "Compétences" ou "Expériences".
+  Exemple pour Services: { "title": "Mes Services", "items": [{ "title": "Nom du service", "description": "Détails" }] }
+  Exemple pour Compétences: { "title": "Compétences", "skills": ["React", "Python"] }
 
 {services_instruction}
+{profile_image_instruction}
+{domain_note}
 
 Domaine métier (slug): {req.domain}
 Ton rédactionnel: {req.tone}
@@ -324,6 +384,57 @@ def get_credit_balance(userId: Optional[str] = Query(default=None)):
         print(f"Db error: {e}")
         return {"balance": 50}
 
+# --- UPLOAD IMAGE API ---
+@app.post("/api/upload/image")
+def upload_image(file: UploadFile = File(...), user_id: str = Depends(get_current_user)):
+    """Upload une image de profil vers Supabase Storage."""
+    # Vérifier le type de fichier
+    allowed_types = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail="Type de fichier non supporté. Utilisez JPEG, PNG ou WebP.")
+
+    # Vérifier la taille (max 5MB)
+    file_size = 0
+    content = b""
+    for chunk in file.file:
+        file_size += len(chunk)
+        if file_size > 5 * 1024 * 1024:  # 5MB
+            raise HTTPException(status_code=400, detail="Fichier trop volumineux (max 5MB).")
+        content += chunk
+
+    # Générer un nom de fichier unique
+    file_extension = file.filename.split(".")[-1].lower() if "." in file.filename else "jpg"
+    unique_filename = f"{user_id}_{uuid.uuid4().hex}.{file_extension}"
+
+    try:
+        # Upload vers Supabase Storage
+        bucket_name = "profile-images"  # Assurez-vous que ce bucket existe dans Supabase
+        
+        # Créer le bucket s'il n'existe pas (optionnel, peut être fait manuellement)
+        try:
+            supabase.storage.create_bucket(bucket_name, {"public": True})
+        except:
+            pass  # Bucket existe probablement déjà
+        
+        # Upload du fichier
+        supabase.storage.from_(bucket_name).upload(
+            unique_filename,
+            content,
+            {"content-type": file.content_type, "cache-control": "3600"}
+        )
+        
+        # Obtenir l'URL publique
+        public_url = supabase.storage.from_(bucket_name).get_public_url(unique_filename)
+        
+        return {
+            "url": public_url,
+            "filename": unique_filename
+        }
+        
+    except Exception as e:
+        logger.error("Image upload error: %s", e)
+        raise HTTPException(status_code=500, detail="Erreur lors de l'upload de l'image")
+
 # --- COACH IA API ---
 @app.post("/api/coach/chat")
 def coach_chat(request: ChatRequest):
@@ -404,12 +515,6 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest):
                 detail=f"Crédits insuffisants ({AI_PORTFOLIO_CREDIT_COST} requis pour une génération IA)",
             )
 
-        if not GEMINI_API_KEY:
-            raise HTTPException(
-                status_code=503,
-                detail="Clé API Gemini non configurée sur le serveur",
-            )
-
         prompt = _build_portfolio_generation_prompt(req)
         logger.info("Generating portfolio for user=%s slug=%s domain=%s", user_id, req.slug, req.domain)
 
@@ -421,52 +526,96 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest):
         raw_text = ""
         parsed = None
         last_error = None
+        providers = []
+        if GEMINI_API_KEY:
+            providers.append('gemini')
+        if GROQ_API_KEY:
+            providers.append('groq')
+
+        if not providers:
+            raise HTTPException(
+                status_code=503,
+                detail="Aucune clé d'IA configurée (Gemini ou GROQ).",
+            )
 
         for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                model = genai.GenerativeModel("gemini-flash-latest")
-                response = model.generate_content(
-                    prompt,
-                    generation_config=genai.GenerationConfig(
-                        response_mime_type="application/json",
-                        temperature=0.65,
-                    ),
-                    request_options={"timeout": 120},
-                )
+            for provider in providers:
+                try:
+                    if provider == 'gemini':
+                        model = genai.GenerativeModel('gemini-flash-latest')
+                        response = model.generate_content(
+                            prompt,
+                            generation_config=genai.GenerationConfig(
+                                response_mime_type='application/json',
+                                temperature=0.65,
+                            ),
+                            request_options={'timeout': 120},
+                        )
 
-                # Safety check — Gemini may block content
-                if not response.parts:
-                    block_reason = getattr(response.prompt_feedback, "block_reason", "unknown")
-                    logger.warning("Gemini response blocked: %s", block_reason)
-                    raise HTTPException(
-                        status_code=422,
-                        detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
-                    )
+                        # Safety check — Gemini may block content
+                        if not response.parts:
+                            block_reason = getattr(response.prompt_feedback, 'block_reason', 'unknown')
+                            logger.warning('Gemini response blocked: %s', block_reason)
+                            raise HTTPException(
+                                status_code=422,
+                                detail=f"L'IA a refusé de générer le contenu (raison: {block_reason}). Reformulez votre bio ou objectif.",
+                            )
 
-                raw_text = (response.text or "").strip()
-                logger.info("Gemini raw response length: %d chars (attempt %d)", len(raw_text), attempt)
+                        raw_text = (response.text or '').strip()
+                    else:
+                        groq_url = 'https://api.groq.com/openai/v1/chat/completions'
+                        headers = {
+                            'Authorization': f'Bearer {GROQ_API_KEY}',
+                            'Content-Type': 'application/json',
+                        }
+                        payload = {
+                            'model': 'mixtral-8x7b-32768',
+                            'messages': [
+                                {'role': 'user', 'content': prompt},
+                            ],
+                            'temperature': 0.65,
+                            'max_tokens': 1500,
+                        }
+                        response = requests.post(groq_url, headers=headers, json=payload, timeout=120)
+                        if response.status_code != 200:
+                            raise Exception(f'Groq API error {response.status_code}: {response.text}')
+                        groq_data = response.json()
+                        raw_text = str(groq_data.get('choices', [{}])[0].get('message', {}).get('content', '')).strip()
 
-                if not raw_text:
-                    raise HTTPException(status_code=502, detail="L'IA a renvoyé une réponse vide")
+                    logger.info('%s raw response length: %d chars (attempt %d)', provider.upper(), len(raw_text), attempt)
 
-                parsed = json.loads(raw_text)
-                break  # Success — exit retry loop
+                    if not raw_text:
+                        raise HTTPException(status_code=502, detail='L\'IA a renvoyé une réponse vide')
 
-            except HTTPException:
-                raise
-            except json.JSONDecodeError as e:
-                logger.error("Portfolio AI JSON parse error: %s — raw[:500]: %s", e, raw_text[:500])
-                raise HTTPException(status_code=502, detail="Réponse IA invalide (JSON). Réessayez.")
-            except Exception as e:
-                last_error = e
-                err_str = str(e).lower()
-                is_rate_limit = "429" in err_str or "resourceexhausted" in err_str or "quota" in err_str
-                if is_rate_limit and attempt < MAX_RETRIES:
-                    logger.warning("Gemini rate-limited (attempt %d/%d). Retrying in %ds…", attempt, MAX_RETRIES, RETRY_WAIT)
-                    time.sleep(RETRY_WAIT)
+                    json_text = _extract_json_object(raw_text) or raw_text
+                    parsed = json.loads(json_text)
+                    break
+
+                except HTTPException:
+                    raise
+                except json.JSONDecodeError as e:
+                    logger.error('Portfolio AI JSON parse error (%s): %s — raw[:500]: %s', provider, e, raw_text[:500])
+                    last_error = e
                     continue
-                logger.error("Portfolio AI Gemini error (attempt %d): %s\n%s", attempt, e, traceback.format_exc())
-                raise HTTPException(status_code=502, detail=f"Erreur IA: {type(e).__name__}: {e}")
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e).lower()
+                    is_rate_limit = '429' in err_str or 'resourceexhausted' in err_str or 'quota' in err_str
+                    if provider == 'gemini' and is_rate_limit and attempt < MAX_RETRIES:
+                        logger.warning('Gemini rate-limited (attempt %d/%d). Retrying in %ds…', attempt, MAX_RETRIES, RETRY_WAIT)
+                        time.sleep(RETRY_WAIT)
+                        continue
+                    logger.error('Portfolio AI %s error (attempt %d): %s\n%s', provider.upper(), attempt, e, traceback.format_exc())
+                    if provider == 'gemini' and GROQ_API_KEY:
+                        logger.info('Falling back to GROQ on failure of Gemini.')
+                        continue
+                    continue
+
+            if parsed is not None:
+                break
+
+        if parsed is None:
+            raise HTTPException(status_code=502, detail=f'Erreur IA: {type(last_error).__name__ if last_error else "Inconnue"}: {last_error}')
 
         if not isinstance(parsed, dict):
             logger.error("Gemini returned non-dict: %s", type(parsed))
@@ -522,6 +671,33 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest):
 
 
 # --- CRUD Portfolios ---
+@app.post("/api/portfolios/{portfolio_id}/publish")
+def publish_portfolio(portfolio_id: str, user_id: str = Depends(get_current_user)):
+    check = supabase.table("portfolios").select("id,slug,user_id,visibility").eq("id", portfolio_id).execute()
+    if not check.data:
+        raise HTTPException(status_code=404, detail="Portfolio non trouvé")
+
+    portfolio = check.data[0]
+    if portfolio.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Accès refusé")
+
+    try:
+        supabase.table("portfolios").update({
+            "status": "published",
+            "visibility": "public",
+            "published_at": _iso_now(),
+        }).eq("id", portfolio_id).execute()
+    except Exception as e:
+        logger.error("Publish portfolio error: %s", e)
+        raise HTTPException(status_code=500, detail="Impossible de publier le portfolio")
+
+    slug = portfolio.get("slug") or ""
+    return {
+        "status": "ok",
+        "url": _get_public_portfolio_url(slug),
+    }
+
+
 @app.post("/api/portfolios")
 def create_portfolio(portfolio: PortfolioCreate, user_id: str = Depends(get_current_user)):
     # Déduire crédits (10 credits for AI generated, 5 for template)

@@ -53,6 +53,9 @@ export default function CreateWithAI() {
   const [github, setGithub] = useState('');
   const [website, setWebsite] = useState('');
 
+  const [profileImageUrl, setProfileImageUrl] = useState('');
+  const [uploadingImage, setUploadingImage] = useState(false);
+
   const [bio, setBio] = useState('');
   const [skills, setSkills] = useState('');
   const [yearsExperience, setYearsExperience] = useState<string>('');
@@ -168,6 +171,50 @@ export default function CreateWithAI() {
   };
   const removeService = (i: number) => setServices(prev => prev.filter((_, idx) => idx !== i));
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Vérifier le type de fichier
+    if (!file.type.startsWith('image/')) {
+      alert('Veuillez sélectionner une image (JPEG, PNG, WebP)');
+      return;
+    }
+
+    // Vérifier la taille (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      alert('L\'image ne doit pas dépasser 5MB');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(apiUrl('/api/upload/image'), {
+        method: 'POST',
+        body: formData,
+        headers: {
+          // Ne pas définir Content-Type, laisse le navigateur le faire pour FormData
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.detail || 'Erreur lors de l\'upload');
+      }
+
+      const data = await response.json();
+      setProfileImageUrl(data.url);
+    } catch (error) {
+      console.error('Upload error:', error);
+      alert('Erreur lors de l\'upload de l\'image. Veuillez réessayer.');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
   const buildPayload = () => {
     const y =
       yearsExperience.trim() === ''
@@ -219,6 +266,7 @@ export default function CreateWithAI() {
       accent_color_hint: accentHint.trim() || null,
       career_goal: careerGoal.trim(),
       target_audience: targetAudience.trim(),
+      profile_image_url: profileImageUrl.trim() || null,
     };
   };
 
@@ -391,6 +439,44 @@ export default function CreateWithAI() {
                 <Field label="GitHub" value={github} onChange={setGithub} placeholder="https://…" />
               </div>
               <Field label={t('ai_portfolio.website')} value={website} onChange={setWebsite} placeholder="https://…" />
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-[var(--text)]">{t('ai_portfolio.profile_image')}</label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    disabled={uploadingImage}
+                    className="w-full px-4 py-3 rounded-[12px] border border-[var(--border-color)] bg-[var(--bg)] text-[var(--text)] text-sm outline-none focus:border-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-[8px] file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+                  />
+                  {uploadingImage && (
+                    <div className="flex items-center gap-2 text-sm text-[var(--text2)]">
+                      <Loader2 size={16} className="animate-spin" />
+                      Upload en cours...
+                    </div>
+                  )}
+                  {profileImageUrl && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-green-600">Image uploadée avec succès !</p>
+                      <div className="relative inline-block">
+                        <img
+                          src={profileImageUrl}
+                          alt="Aperçu"
+                          className="w-20 h-20 object-cover rounded-lg border border-[var(--border-color)]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setProfileImageUrl('')}
+                          className="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-[var(--text2)]">Formats acceptés: JPEG, PNG, WebP (max 5MB)</p>
+              </div>
             </div>
           )}
 

@@ -44,6 +44,7 @@ class PortfolioGenerateRequest(BaseModel):
 
     full_name: str = Field(..., min_length=1, max_length=120)
     professional_title: str = Field(..., min_length=1, max_length=120)
+    profile_image_url: Optional[str] = None
     email: str = ""
     phone: str = ""
     whatsapp: Optional[str] = None

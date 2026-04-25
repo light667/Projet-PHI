@@ -1,4 +1,4 @@
-# Φ PHI - Portfolio & Career Intelligence Platform
+��# Φ PHI - Portfolio & Career Intelligence Platform
 
 ![Status](https://img.shields.io/badge/Status-En%20D%C3%A9veloppement-blue)
 ![Stack](https://img.shields.io/badge/Stack-React%20%7C%20FastAPI%20%7C%20Supabase-success)
@@ -21,9 +21,9 @@
 * Prévisualisation temps réel Desktop & Mobile avec gestion d'historique.
 
 ### 2. Assistant Phi (Coach IA)
-* **Chat en temps réel** (mémoire session Redis) rapide et fluide.
+* **Chat en temps réel** (mémoire session Redisrapide et fluide.
 * **Orientation carrière** (Recommandations et diagnostics).
-* **Génération de documents** : CV optimisé ATS (export PDF) et lettres de motivation sur-mesure.
+* **Génération de documents** : CV optimisé ATS (export PDFet lettres de motivation sur-mesure.
 * **Optimisation LinkedIn** (Titres, résumés, posts viraux).
 * **Parcours de compétences gamifiés** structurés.
 * **Simulation d'entretien** avec feedback détaillé et score.
