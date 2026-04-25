@@ -17,7 +17,13 @@ services:
         value: "https://phi-org.web.app,http://localhost:5173,http://127.0.0.1:5173"
       - key: GEMINI_API_KEY
         sync: false
+      - key: GROQ_API_KEY
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: FRONTEND_BASE_URL
+        value: "https://phi-org.web.app"
+      - key: FRONTEND_BASE_URL
+        value: "https://phi-org.web.app"
