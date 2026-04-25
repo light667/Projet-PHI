@@ -241,12 +241,12 @@ def _build_portfolio_generation_prompt(req: PortfolioGenerateRequest) -> str:
 Règles pour "content" des sections :
 - hero: headline, subheadline, ctaPrimary, ctaSecondary (optionnel), tags (liste de mots-clés), profileImageUrl (optionnel si fourni)
 - about: title, body (2-4 paragraphes, ton {req.tone}), highlights (liste de 4-6 puces courtes)
-- projects: title, intro (phrase), items: [{ "name": "...", "description": "...", "url": "...", "tags": [] }] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
-- contact: title, email, phone, whatsapp, location, links: [{ "label": "...", "url": "..." }]
-- gallery: title, intro, images: [{ "url": "...", "caption": "..." }] (utile pour les portfolios visuels)
+- projects: title, intro (phrase), items: [{{"name": "...", "description": "...", "url": "...", "tags": []}}] — au moins 2 items (réels si fournis, sinon exemples à personnaliser)
+- contact: title, email, phone, whatsapp, location, links: [{{"label": "...", "url": "..."}}]
+- gallery: title, intro, images: [{{"url": "...", "caption": "..."}}] (utile pour les portfolios visuels)
 - custom: peut être utilisé pour "Services", "Compétences" ou "Expériences".
-  Exemple pour Services: { "title": "Mes Services", "items": [{ "title": "Nom du service", "description": "Détails" }] }
-  Exemple pour Compétences: { "title": "Compétences", "skills": ["React", "Python"] }
+  Exemple pour Services: {{"title": "Mes Services", "items": [{{"title": "Nom du service", "description": "Détails"}}]}}
+  Exemple pour Compétences: {{"title": "Compétences", "skills": ["React", "Python"]}}
 
 {services_instruction}
 {profile_image_instruction}
