@@ -623,9 +623,16 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest, user_id: str = Depends(
             "content_json": {"pending": True},
             "slug": req.slug[:48],
             "status": "draft",
+            "visibility": req.visibility,
         }
 
         try:
+            existing = supabase.table("portfolios").select("id").eq("slug", req.slug[:48]).execute()
+            if existing.data:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Ce slug est déjà utilisé. Modifiez le segment d'URL et réessayez.",
+                )
             ins = supabase.table("portfolios").insert(row).execute()
             if not ins.data:
                 raise HTTPException(status_code=500, detail="Échec enregistrement portfolio")
@@ -633,8 +640,19 @@ def generate_portfolio_ai(req: PortfolioGenerateRequest, user_id: str = Depends(
         except HTTPException:
             raise
         except Exception as e:
-            print(f"Portfolio insert error: {e}")
-            raise HTTPException(status_code=500, detail="Erreur base de données lors de la sauvegarde")
+            err = str(e)
+            logger.error("Portfolio insert error: %s", err)
+            if "visibility" in err and "column" in err.lower():
+                raise HTTPException(
+                    status_code=500,
+                    detail="Schéma Supabase incomplet: ajoutez la colonne portfolios.visibility puis relancez.",
+                )
+            if "duplicate" in err.lower() or "unique" in err.lower():
+                raise HTTPException(
+                    status_code=409,
+                    detail="Ce slug est déjà utilisé. Modifiez le segment d'URL et réessayez.",
+                )
+            raise HTTPException(status_code=500, detail=f"Erreur base de données lors de la sauvegarde: {err[:240]}")
 
         draft = _draft_from_core(portfolio_id, req, core)
         try:

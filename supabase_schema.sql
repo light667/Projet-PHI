@@ -32,6 +32,21 @@ create table if not exists public.portfolios (
 
 -- Migrations idempotentes pour les bases déjà créées avant ce schéma.
 alter table public.portfolios
+  add column if not exists user_id text;
+
+alter table public.portfolios
+  add column if not exists title text;
+
+alter table public.portfolios
+  add column if not exists template text not null default 'template';
+
+alter table public.portfolios
+  add column if not exists content_json jsonb not null default '{}'::jsonb;
+
+alter table public.portfolios
+  add column if not exists slug text;
+
+alter table public.portfolios
   add column if not exists visibility text not null default 'private';
 
 alter table public.portfolios
@@ -42,6 +57,9 @@ alter table public.portfolios
 
 alter table public.portfolios
   add column if not exists updated_at timestamptz not null default now();
+
+alter table public.portfolios
+  add column if not exists created_at timestamptz not null default now();
 
 do $$
 begin

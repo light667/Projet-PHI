@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from typing import Any
 
 import jwt
@@ -12,6 +13,7 @@ FIREBASE_CERTS_URL = (
 )
 
 _CERT_CACHE: dict[str, Any] = {"expires_at": 0.0, "certs": {}}
+logger = logging.getLogger("phi-api.auth")
 
 
 def _env_flag(name: str, default: bool = False) -> bool:
@@ -83,14 +85,25 @@ def get_current_user(authorization: str | None = Header(default=None)) -> str:
             algorithms=["RS256"],
             audience=project_id,
             issuer=f"https://securetoken.google.com/{project_id}",
+            leeway=60,
         )
     except HTTPException:
         raise
     except jwt.PyJWTError as exc:
+        try:
+            unsafe = jwt.decode(token, options={"verify_signature": False})
+            logger.warning(
+                "Firebase token rejected: %s; configured_project=%s; token_aud=%s; token_iss=%s",
+                type(exc).__name__,
+                _get_project_id(),
+                unsafe.get("aud"),
+                unsafe.get("iss"),
+            )
+        except Exception:
+            logger.warning("Firebase token rejected: %s", type(exc).__name__)
         raise HTTPException(status_code=401, detail="Token Firebase invalide") from exc
 
     uid = payload.get("user_id") or payload.get("sub")
     if not uid:
         raise HTTPException(status_code=401, detail="Token Firebase sans UID")
     return str(uid)
-
