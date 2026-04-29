@@ -23,5 +23,7 @@ services:
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
+      - key: FIREBASE_PROJECT_ID
+        value: "phi-org"
       - key: FRONTEND_BASE_URL
         value: "https://phi-org.web.app"

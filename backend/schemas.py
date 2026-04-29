@@ -2,12 +2,18 @@ from pydantic import BaseModel, Field
 from typing import Optional, Dict, List
 
 class PortfolioCreate(BaseModel):
-    title: str
-    template: str = "tech"
+    title: str = Field(..., min_length=2, max_length=120)
+    template: str = Field(default="tech", max_length=64)
+    slug: Optional[str] = Field(default=None, min_length=2, max_length=48, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    visibility: str = Field(default="private", pattern=r"^(public|private)$")
+    status: str = Field(default="draft", pattern=r"^(draft|published|archived)$")
     content_json: Optional[Dict] = None
 
 class PortfolioUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, min_length=2, max_length=120)
+    slug: Optional[str] = Field(default=None, min_length=2, max_length=48, pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
+    visibility: Optional[str] = Field(default=None, pattern=r"^(public|private)$")
+    status: Optional[str] = Field(default=None, pattern=r"^(draft|published|archived)$")
     content_json: Optional[Dict] = None
 
 class ChatMessage(BaseModel):
@@ -15,7 +21,7 @@ class ChatMessage(BaseModel):
     content: str
     
 class ChatRequest(BaseModel):
-    userId: str # To bridge from frontend
+    userId: str = "" # Backward compatibility; backend trusts the Firebase token.
     message: str
     history: List[ChatMessage] = []
 

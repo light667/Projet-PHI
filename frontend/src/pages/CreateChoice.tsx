@@ -80,7 +80,7 @@ export default function CreateChoice() {
             <div className="flex justify-between items-start mb-4">
               <h2 className="text-2xl font-black text-[var(--text)]">À partir d'un modèle</h2>
               <span className="text-xs font-bold bg-slate-100 dark:bg-zinc-800 text-slate-500 py-1.5 px-3 rounded-full border border-[var(--border-color)]">
-                2 CR
+                5 CR
               </span>
             </div>
 

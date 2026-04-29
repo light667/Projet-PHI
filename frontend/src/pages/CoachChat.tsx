@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Send, Bot, User, Sparkles, AlertCircle, RefreshCw } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useAuth } from '../contexts/AuthContext.js';
-import { apiUrl } from '../lib/api.js';
+import { apiUrl, authenticatedFetch } from '../lib/api.js';
 
 type Message = {
   id: string;
@@ -25,7 +25,7 @@ export default function CoachChat() {
   useEffect(() => {
     const uid = user?.uid;
     const q = uid ? `?userId=${encodeURIComponent(uid)}` : '';
-    fetch(apiUrl(`/api/credits/balance${q}`), {
+    authenticatedFetch(apiUrl(`/api/credits/balance${q}`), {
       headers: { 'Content-Type': 'application/json' }
     })
       .then(r => r.json())
@@ -77,7 +77,7 @@ export default function CoachChat() {
       // Optimistic update
       setCredits(prev => Math.max(0, prev - 1));
 
-      const res = await fetch(apiUrl('/api/coach/chat'), {
+      const res = await authenticatedFetch(apiUrl('/api/coach/chat'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

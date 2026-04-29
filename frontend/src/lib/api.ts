@@ -1,3 +1,6 @@
+import { getAuth } from 'firebase/auth';
+import { app } from './firebase.js';
+
 /**
  * Base URL du backend FastAPI.
  *
@@ -25,6 +28,29 @@ export function apiUrl(path: string): string {
   const base = getApiBaseUrl();
   const p = path.startsWith('/') ? path : `/${path}`;
   return `${base}${p}`;
+}
+
+export async function getAuthHeaders(): Promise<Record<string, string>> {
+  const user = getAuth(app).currentUser;
+  if (!user) {
+    return {};
+  }
+  const token = await user.getIdToken();
+  return { Authorization: `Bearer ${token}` };
+}
+
+export async function authenticatedFetch(
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const authHeaders = await getAuthHeaders();
+  return fetch(url, {
+    ...init,
+    headers: {
+      ...authHeaders,
+      ...(init.headers || {}),
+    },
+  });
 }
 
 /**
@@ -70,4 +96,23 @@ export async function fetchWithTimeout(
   } finally {
     clearTimeout(timer);
   }
+}
+
+export async function authenticatedFetchWithTimeout(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = 120_000,
+): Promise<Response> {
+  const authHeaders = await getAuthHeaders();
+  return fetchWithTimeout(
+    url,
+    {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...(init.headers || {}),
+      },
+    },
+    timeoutMs,
+  );
 }

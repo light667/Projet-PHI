@@ -15,7 +15,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext.js';
-import { apiUrl, wakeBackend, fetchWithTimeout } from '../lib/api.js';
+import { apiUrl, wakeBackend, authenticatedFetch, authenticatedFetchWithTimeout } from '../lib/api.js';
 import { savePortfolioDraft, toSlug, assertPortfolioDraft, type PortfolioVisibility } from '../lib/portfolioDraft.js';
 
 const AI_DOMAINS = [
@@ -192,7 +192,7 @@ export default function CreateWithAI() {
       const formData = new FormData();
       formData.append('file', file);
 
-      const response = await fetch(apiUrl('/api/upload/image'), {
+      const response = await authenticatedFetch(apiUrl('/api/upload/image'), {
         method: 'POST',
         body: formData,
         headers: {
@@ -293,7 +293,7 @@ export default function CreateWithAI() {
 
     // Phase 2: Generate portfolio
     try {
-      const res = await fetchWithTimeout(
+      const res = await authenticatedFetchWithTimeout(
         apiUrl('/api/portfolios/generate'),
         {
           method: 'POST',

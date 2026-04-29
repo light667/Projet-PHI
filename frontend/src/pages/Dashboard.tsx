@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.js';
-import { apiUrl } from '../lib/api.js';
+import { apiUrl, authenticatedFetch } from '../lib/api.js';
 import { useTranslation } from 'react-i18next';
 import { useEffect, useState } from 'react';
 import { 
@@ -23,7 +23,7 @@ export default function Dashboard() {
       const uid = user?.uid;
       const q = uid ? `?userId=${encodeURIComponent(uid)}` : '';
       try {
-        const res = await fetch(apiUrl(`/api/credits/balance${q}`), {
+        const res = await authenticatedFetch(apiUrl(`/api/credits/balance${q}`), {
           headers: { 'Content-Type': 'application/json' }
         });
         if (res.ok) {

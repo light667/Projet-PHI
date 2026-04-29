@@ -17,6 +17,7 @@ import requests
 load_dotenv()
 
 from db import supabase, get_supabase
+from auth import get_current_user
 from schemas import PortfolioCreate, PortfolioUpdate, ChatRequest, PortfolioGenerateRequest
 
 # --- Logging ---
@@ -96,11 +97,6 @@ async def log_origin_middleware(request, call_next):
         logger.info("Incoming request from origin: %s", origin)
     response = await call_next(request)
     return response
-
-# --- Authentication Mock ---
-def get_current_user(user_id: str = "test-user-id"):
-    return user_id
-
 
 def _iso_now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -370,9 +366,9 @@ def ping():
 
 # --- CREDITS API ---
 @app.get("/api/credits/balance")
-def get_credit_balance(userId: Optional[str] = Query(default=None)):
-    """Solde crédits ; passez userId (UID Firebase) depuis le frontend."""
-    uid = userId or "test-user-id"
+def get_credit_balance(user_id: str = Depends(get_current_user), userId: Optional[str] = Query(default=None)):
+    """Solde crédits pour l'utilisateur authentifié."""
+    uid = user_id
     try:
         res = supabase.table("user_credits").select("balance").eq("user_id", uid).execute()
         if not res.data:
@@ -437,8 +433,7 @@ def upload_image(file: UploadFile = File(...), user_id: str = Depends(get_curren
 
 # --- COACH IA API ---
 @app.post("/api/coach/chat")
-def coach_chat(request: ChatRequest):
-    user_id = request.userId or "test-user-id"
+def coach_chat(request: ChatRequest, user_id: str = Depends(get_current_user)):
     
     # Synchronisation
     _ensure_user_exists(user_id)
@@ -500,11 +495,9 @@ def coach_chat(request: ChatRequest):
 
 # --- Génération portfolio IA ---
 @app.post("/api/portfolios/generate")
-def generate_portfolio_ai(req: PortfolioGenerateRequest):
+def generate_portfolio_ai(req: PortfolioGenerateRequest, user_id: str = Depends(get_current_user)):
     logger.info(">>> REQUÊTE DE GÉNÉRATION REÇUE - User: %s, Slug: %s", req.userId, req.slug)
     try:
-        user_id = req.userId or "test-user-id"
-        
         # Synchronisation utilisateur Firebase -> Supabase
         _ensure_user_exists(user_id, req.email, req.full_name)
         
@@ -702,31 +695,60 @@ def publish_portfolio(portfolio_id: str, user_id: str = Depends(get_current_user
 def create_portfolio(portfolio: PortfolioCreate, user_id: str = Depends(get_current_user)):
     # Déduire crédits (10 credits for AI generated, 5 for template)
     cost = 10 if portfolio.template == "ai" else 5
-    
+
+    balance = _get_credit_balance(user_id)
+    if balance < cost:
+        raise HTTPException(status_code=403, detail="Crédits insuffisants")
+
     try:
-        credits_res = supabase.table("user_credits").select("balance").eq("user_id", user_id).execute()
-        balance = credits_res.data[0]["balance"] if credits_res.data else 50
-        if balance < cost:
-             raise HTTPException(status_code=403, detail="Crédits insuffisants")
-             
-        supabase.table("user_credits").update({"balance": balance - cost}).eq("user_id", user_id).execute()
-        supabase.table("credit_transactions").insert({
-            "user_id": user_id, "amount": -cost,
-            "description": f"Génération Portfolio ({portfolio.template})"
-        }).execute()
+        existing = (
+            supabase.table("portfolios")
+            .select("id")
+            .eq("slug", portfolio.slug)
+            .execute()
+            if portfolio.slug
+            else None
+        )
+        if existing and existing.data:
+            raise HTTPException(status_code=409, detail="Ce slug est déjà utilisé")
     except Exception as e:
-         pass
-         
+        if isinstance(e, HTTPException):
+            raise
+        logger.warning("Slug uniqueness check skipped: %s", e)
+
+    content = portfolio.content_json or {}
+    slug = portfolio.slug or content.get("slug") or uuid.uuid4().hex[:8]
     data = {
         "user_id": user_id,
         "title": portfolio.title,
         "template": portfolio.template,
-        "content_json": portfolio.content_json or {},
-        "slug": uuid.uuid4().hex[:8],
-        "status": "draft"
+        "content_json": {"pending": True},
+        "slug": slug,
+        "status": portfolio.status,
+        "visibility": portfolio.visibility,
     }
-    result = supabase.table("portfolios").insert(data).execute()
-    return result.data[0]
+    try:
+        result = supabase.table("portfolios").insert(data).execute()
+        if not result.data:
+            raise HTTPException(status_code=500, detail="Échec création portfolio")
+
+        row = result.data[0]
+        portfolio_id = str(row["id"])
+        if isinstance(content, dict):
+            content = {**content, "id": portfolio_id, "updatedAt": _iso_now()}
+        updated = (
+            supabase.table("portfolios")
+            .update({"content_json": content})
+            .eq("id", portfolio_id)
+            .execute()
+        )
+        _debit_credits(user_id, balance, cost, f"Génération Portfolio ({portfolio.template})")
+        return updated.data[0] if updated.data else {**row, "content_json": content}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Create portfolio error: %s", e)
+        raise HTTPException(status_code=500, detail="Impossible de créer le portfolio")
 
 @app.get("/api/portfolios")
 def list_portfolios(user_id: str = Depends(get_current_user)):
@@ -734,8 +756,8 @@ def list_portfolios(user_id: str = Depends(get_current_user)):
     return result.data
 
 @app.get("/api/portfolios/{portfolio_id}")
-def get_portfolio(portfolio_id: str):
-    result = supabase.table("portfolios").select("*").eq("id", portfolio_id).execute()
+def get_portfolio(portfolio_id: str, user_id: str = Depends(get_current_user)):
+    result = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", user_id).execute()
     if not result.data:
         raise HTTPException(404, "Portfolio not found")
     return result.data[0]
@@ -745,14 +767,23 @@ def update_portfolio(portfolio_id: str, update: PortfolioUpdate, user_id: str = 
     check = supabase.table("portfolios").select("*").eq("id", portfolio_id).eq("user_id", user_id).execute()
     if not check.data:
         raise HTTPException(403, "Not yours")
-    data = {k: v for k, v in update.dict().items() if v is not None}
+    data = {k: v for k, v in update.model_dump().items() if v is not None}
+    if "content_json" in data and isinstance(data["content_json"], dict):
+        data["content_json"] = {**data["content_json"], "id": portfolio_id, "updatedAt": _iso_now()}
     result = supabase.table("portfolios").update(data).eq("id", portfolio_id).execute()
     return result.data[0]
 
 @app.get("/api/portfolios/by-slug/{slug}")
 def get_portfolio_by_slug(slug: str):
     """Récupère un portfolio public par son slug."""
-    result = supabase.table("portfolios").select("*").eq("slug", slug).execute()
+    result = (
+        supabase.table("portfolios")
+        .select("*")
+        .eq("slug", slug)
+        .eq("status", "published")
+        .eq("visibility", "public")
+        .execute()
+    )
     if not result.data:
         raise HTTPException(404, "Portfolio non trouvé")
     

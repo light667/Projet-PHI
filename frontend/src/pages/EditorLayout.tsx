@@ -17,7 +17,8 @@ import {
   AlertTriangle,
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { listPortfolioDraftSections, loadPortfolioDraft } from '../lib/portfolioDraft.js';
+import { apiUrl, authenticatedFetch } from '../lib/api.js';
+import { listPortfolioDraftSections, loadPortfolioDraft, savePortfolioDraft } from '../lib/portfolioDraft.js';
 import PortfolioRenderer from '../components/PortfolioRenderer.js';
 
 
@@ -26,6 +27,10 @@ export default function EditorLayout() {
   const [deviceView, setDeviceView] = useState<'desktop' | 'mobile'>('desktop');
   const [activeTab, setActiveTab] = useState<'sections' | 'theme' | 'settings'>('sections');
   const [portfolio, setPortfolio] = useState(() => loadPortfolioDraft());
+  const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [statusMessage, setStatusMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
   const navigate = useNavigate();
   const { id } = useParams();
 
@@ -34,6 +39,77 @@ export default function EditorLayout() {
   }, [id]);
 
   const visibleSections = useMemo(() => (portfolio ? listPortfolioDraftSections(portfolio) : []), [portfolio]);
+  const isPersistedPortfolio = !!portfolio?.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(portfolio.id);
+
+  const handleSave = async () => {
+    if (!portfolio) return null;
+    setIsSaving(true);
+    setErrorMessage('');
+    setStatusMessage('');
+
+    try {
+      const payload = {
+        title: portfolio.metadata.title,
+        template: portfolio.templateId || portfolio.templateName || 'template',
+        slug: portfolio.slug,
+        visibility: portfolio.visibility,
+        status: 'draft',
+        content_json: portfolio,
+      };
+
+      const res = await authenticatedFetch(
+        apiUrl(isPersistedPortfolio ? `/api/portfolios/${portfolio.id}` : '/api/portfolios'),
+        {
+          method: isPersistedPortfolio ? 'PUT' : 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        },
+      );
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || "Impossible d'enregistrer le portfolio");
+      }
+
+      const savedDraft = data.content_json ? data.content_json : { ...portfolio, id: data.id };
+      savePortfolioDraft(savedDraft);
+      setPortfolio(savedDraft);
+      if (savedDraft.id && savedDraft.id !== portfolio.id) {
+        navigate(`/dashboard/editor/${savedDraft.id}`, { replace: true });
+      }
+      setStatusMessage('Portfolio enregistré.');
+      return savedDraft;
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Impossible d'enregistrer le portfolio");
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setIsPublishing(true);
+    setErrorMessage('');
+    setStatusMessage('');
+
+    try {
+      const saved = await handleSave();
+      if (!saved) return;
+
+      const res = await authenticatedFetch(apiUrl(`/api/portfolios/${saved.id}/publish`), {
+        method: 'POST',
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data.detail || 'Impossible de publier le portfolio');
+      }
+      setStatusMessage(`Portfolio publié: ${data.url}`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Impossible de publier le portfolio');
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   if (!portfolio) {
     return (
@@ -93,6 +169,18 @@ export default function EditorLayout() {
           <span>Template {portfolio.templateName}</span>
           <span className="text-zinc-300">·</span>
           <span>phi.app/~{portfolio.slug}</span>
+          {statusMessage ? (
+            <>
+              <span className="text-zinc-300">·</span>
+              <span className="text-emerald-600">{statusMessage}</span>
+            </>
+          ) : null}
+          {errorMessage ? (
+            <>
+              <span className="text-zinc-300">·</span>
+              <span className="text-red-600">{errorMessage}</span>
+            </>
+          ) : null}
         </div>
 
         <div className="flex items-center gap-1 bg-zinc-100/50 p-1 rounded-lg border border-zinc-200/50">
@@ -111,13 +199,21 @@ export default function EditorLayout() {
         </div>
 
         <div className="flex items-center gap-3">
-          <button className="flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors">
+          <button
+            onClick={handleSave}
+            disabled={isSaving || isPublishing}
+            className="flex items-center gap-2 text-sm font-medium text-zinc-600 hover:text-zinc-900 transition-colors disabled:opacity-50"
+          >
             <Save size={16} />
-            <span>Save</span>
+            <span>{isSaving ? 'Saving...' : 'Save'}</span>
           </button>
-          <button className="flex items-center gap-2 text-sm font-medium bg-zinc-900 text-white px-4 py-1.5 rounded-md hover:bg-zinc-800 transition-colors shadow-sm">
+          <button
+            onClick={handlePublish}
+            disabled={isSaving || isPublishing}
+            className="flex items-center gap-2 text-sm font-medium bg-zinc-900 text-white px-4 py-1.5 rounded-md hover:bg-zinc-800 transition-colors shadow-sm disabled:opacity-50"
+          >
             <Send size={16} />
-            <span>Publish</span>
+            <span>{isPublishing ? 'Publishing...' : 'Publish'}</span>
           </button>
         </div>
       </header>
